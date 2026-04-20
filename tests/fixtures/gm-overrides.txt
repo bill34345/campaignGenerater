@@ -1,0 +1,8 @@
+GM Overrides
+
+- Keeper Mara is friendly to the party and will quietly open the bell tower cellar.
+- The burgomaster no longer controls the town watch; Captain Soren does.
+- The relic under the tower was moved to the Blue Lantern inn cellar last session.
+- The bell tower bells were already rung once during the riot, so the seal is no longer intact.
+
+Priority note: session changes and GM overrides take precedence over the official excerpt.

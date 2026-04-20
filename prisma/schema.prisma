@@ -1,0 +1,169 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Campaign {
+  id                  String           @id @default(cuid())
+  name                String
+  system              String           @default("5e")
+  partyLevel          Int
+  tone                String
+  contentConstraints  String?
+  llmProvider         String           @default("openai_responses")
+  llmApiKey           String?
+  llmModel            String?
+  llmBaseUrl          String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  sourceDocuments     SourceDocument[]
+  documentChunks      DocumentChunk[]
+  canonFacts          CanonFact[]
+  campaignDeltas      CampaignDelta[]
+  townProfiles        TownProfile[]
+  questRequests       QuestRequest[]
+  questDrafts         QuestDraft[]
+}
+
+model SourceDocument {
+  id              String          @id @default(cuid())
+  campaignId      String
+  originalName    String
+  storedPath      String
+  mimeType        String
+  checksum        String
+  extractedText   String?
+  pageCount       Int?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  campaign        Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  chunks          DocumentChunk[]
+  canonFacts      CanonFact[]
+
+  @@index([campaignId, createdAt])
+}
+
+model DocumentChunk {
+  id                String         @id @default(cuid())
+  campaignId        String
+  sourceDocumentId  String
+  chunkIndex        Int
+  pageStart         Int?
+  pageEnd           Int?
+  content           String
+  tokenCount        Int?
+  checksum          String?
+  createdAt         DateTime       @default(now())
+  campaign          Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  sourceDocument    SourceDocument @relation(fields: [sourceDocumentId], references: [id], onDelete: Cascade)
+  canonFacts        CanonFact[]
+
+  @@index([sourceDocumentId, chunkIndex])
+  @@index([campaignId, createdAt])
+}
+
+model CanonFact {
+  id               String          @id @default(cuid())
+  campaignId       String
+  sourceDocumentId String?
+  documentChunkId   String?
+  subject          String
+  factType         String
+  value            String
+  status           String          @default("active")
+  priority         Int             @default(0)
+  confidence       Float?
+  evidence         String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  campaign         Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  sourceDocument   SourceDocument?  @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  documentChunk    DocumentChunk?   @relation(fields: [documentChunkId], references: [id], onDelete: SetNull)
+  campaignDeltas   CampaignDelta[]   @relation("CanonFactAsSourceFact")
+
+  @@index([campaignId, subject])
+  @@index([campaignId, factType])
+}
+
+model CampaignDelta {
+  id               String     @id @default(cuid())
+  campaignId       String
+  sourceFactId     String?
+  deltaType        String
+  summary          String
+  createdAt        DateTime   @default(now())
+  campaign         Campaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  sourceFact       CanonFact? @relation("CanonFactAsSourceFact", fields: [sourceFactId], references: [id], onDelete: SetNull)
+
+  @@index([campaignId, createdAt])
+}
+
+model TownProfile {
+  id               String          @id @default(cuid())
+  campaignId       String
+  name             String
+  vibe             String?
+  tension          String?
+  notes            String?
+  questHooks       Json
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  campaign         Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  questRequests    QuestRequest[]
+
+  @@unique([campaignId, name])
+  @@index([campaignId, createdAt])
+}
+
+model QuestRequest {
+  id                String       @id @default(cuid())
+  campaignId        String
+  townProfileId     String?
+  townName          String
+  locale            String       @default("zh")
+  townVibe          String?
+  localTension      String?
+  questType         String?
+  mainPlotRelation  String?
+  desiredLength     String?
+  extraContext      String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  campaign          Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  townProfile       TownProfile? @relation(fields: [townProfileId], references: [id], onDelete: SetNull)
+  questDraft        QuestDraft?
+
+  @@index([campaignId, createdAt])
+  @@index([townProfileId])
+}
+
+model QuestDraft {
+  id                 String        @id @default(cuid())
+  campaignId         String
+  questRequestId     String?       @unique
+  locale             String        @default("zh")
+  generationMode     String        @default("unknown")
+  generationProvider String?
+  generationModel    String?
+  fallbackReason     String?
+  generationErrorCode String?
+  title              String
+  premise            String
+  hook               String
+  scenes             Json
+  npcs               Json
+  encounters         Json
+  rewards            Json
+  returnToMainPlot   String
+  gmSummary          String
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  campaign          Campaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  questRequest      QuestRequest? @relation(fields: [questRequestId], references: [id], onDelete: SetNull)
+
+  @@index([campaignId, createdAt])
+}

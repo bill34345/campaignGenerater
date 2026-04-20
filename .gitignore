@@ -1,0 +1,17 @@
+node_modules
+.next
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+pnpm-debug.log*
+prisma/dev.db
+prisma/dev.db-journal
+data/uploads/**
+!data/uploads/.gitkeep
+.gstack/
+playwright-report/
+test-results/
+.tmp-*.log
+.gitnexus-preserve/
+gstack-windows/runtime/

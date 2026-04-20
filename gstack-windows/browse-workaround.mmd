@@ -1,0 +1,13 @@
+flowchart TD
+    A["PowerShell: Start-GStackBrowse.ps1"] --> B{"server-node.mjs exists?"}
+    B -- "No" --> C["bun build --outdir browse/dist"]
+    C --> D["Patch server.js -> server-node.mjs"]
+    D --> E["Copy bun-polyfill.cjs"]
+    B -- "Yes" --> F["Reuse existing bundle"]
+    E --> G["Start node server-node.mjs"]
+    F --> G
+    G --> H["Write PID and logs"]
+    H --> I["Test-GStackBrowse.ps1"]
+    I --> J["browse.exe goto"]
+    J --> K["browse.exe js document.title"]
+    K --> L["Browser-dependent gstack skills become usable"]

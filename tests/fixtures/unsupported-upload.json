@@ -1,0 +1,4 @@
+{
+  "name": "unsupported upload fixture",
+  "purpose": "verify upload rejection for unsupported file types"
+}

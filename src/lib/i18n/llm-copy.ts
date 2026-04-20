@@ -1,0 +1,183 @@
+import type { Locale } from "@/lib/i18n/locales";
+import type { LlmProvider, QuestDraft } from "@/types/domain";
+
+export function getLlmProviderLabel(
+  provider: LlmProvider | null | undefined,
+  locale: Locale,
+) {
+  const labels = {
+    zh: {
+      openai_responses: "OpenAI Responses",
+      openai_chat: "OpenAI Chat",
+      anthropic: "Anthropic / Claude",
+      notRecorded: "未记录",
+    },
+    en: {
+      openai_responses: "OpenAI Responses",
+      openai_chat: "OpenAI Chat",
+      anthropic: "Anthropic / Claude",
+      notRecorded: "Not recorded",
+    },
+  } as const;
+
+  if (!provider) {
+    return labels[locale].notRecorded;
+  }
+
+  return labels[locale][provider];
+}
+
+export function getLlmSettingsCopy(locale: Locale) {
+  if (locale === "zh") {
+    return {
+      title: "LLM 设置",
+      description:
+        "为当前 campaign 选择 quest 生成和事实抽取共用的 LLM 后端。",
+      provider: "协议 / Provider",
+      apiKey: "API Key",
+      model: "模型覆盖",
+      baseUrl: "Base URL 覆盖",
+      apiKeyPlaceholder: "输入当前 campaign 专用的 API key",
+      modelPlaceholder:
+        "可选，例如 gpt-4.1-mini 或 claude-3-5-sonnet-latest",
+      baseUrlPlaceholder: "可选，自定义网关地址",
+      save: "保存设置",
+      saving: "保存中…",
+      test: "测试连接",
+      testing: "测试中…",
+      saved: "LLM 设置已保存。",
+      testSuccess: "连接成功：{provider} / {model}",
+      failed: "保存设置失败。",
+      testFailed: "连接测试失败。",
+      hints: {
+        openai_responses: "适用于支持 /v1/responses 的官方 OpenAI 或兼容端点。",
+        openai_chat:
+          "适用于只支持 /v1/chat/completions 的网关或中转服务。",
+        anthropic: "适用于 Claude / Anthropic 兼容 key 和端点。",
+      },
+      overviewButton: "LLM 设置",
+      overviewCardTitle: "当前 LLM 配置",
+      noKey: "尚未配置 API key",
+      settingsPageTitle: "Campaign LLM 配置",
+      settingsPageDescription:
+        "这里决定当前 campaign 用哪一种协议来做 quest 生成和事实抽取。设置会同时影响导入资料和生成支线两条链路。",
+      settingsNotFoundEyebrow: "Campaign 未找到",
+      settingsNotFoundTitle: "这个 campaign 不存在",
+      settingsNotFoundDescription:
+        "先回到概览或重新创建一个 campaign，再配置 LLM provider。",
+      backToOverview: "返回概览",
+    } as const;
+  }
+
+  return {
+    title: "LLM settings",
+    description:
+      "Choose the LLM backend this campaign should use for both quest generation and fact extraction.",
+    provider: "Provider",
+    apiKey: "API key",
+    model: "Model override",
+    baseUrl: "Base URL override",
+    apiKeyPlaceholder: "Enter the API key for this campaign",
+    modelPlaceholder:
+      "Optional, for example gpt-4.1-mini or claude-3-5-sonnet-latest",
+    baseUrlPlaceholder: "Optional custom gateway URL",
+    save: "Save settings",
+    saving: "Saving…",
+    test: "Test connection",
+    testing: "Testing…",
+    saved: "LLM settings saved.",
+    testSuccess: "Connection succeeded: {provider} / {model}",
+    failed: "Failed to save settings.",
+    testFailed: "Connection test failed.",
+    hints: {
+      openai_responses: "Use this when your endpoint supports /v1/responses.",
+      openai_chat:
+        "Use this when your gateway only supports /v1/chat/completions.",
+      anthropic: "Use this for Claude / Anthropic-compatible keys.",
+    },
+    overviewButton: "LLM settings",
+    overviewCardTitle: "Current LLM configuration",
+    noKey: "No API key configured yet",
+    settingsPageTitle: "Campaign LLM settings",
+    settingsPageDescription:
+      "This page controls which protocol the campaign uses for both quest generation and fact extraction.",
+    settingsNotFoundEyebrow: "Campaign not found",
+    settingsNotFoundTitle: "This campaign does not exist",
+    settingsNotFoundDescription:
+      "Return to the overview or create a new campaign before configuring LLM providers.",
+    backToOverview: "Back to overview",
+  } as const;
+}
+
+export function getQuestGenerationCopy(locale: Locale) {
+  if (locale === "zh") {
+    return {
+      eyebrow: "生成来源",
+      sourceLabel: "生成方式",
+      providerLabel: "Provider",
+      modelLabel: "模型",
+      providerBadge: "LLM Provider",
+      fallbackBadge: "回退草稿",
+      unknownBadge: "未知来源",
+      providerSummary: "这份草稿由已配置的 LLM provider 生成。",
+      fallbackSummary:
+        "这份草稿来自本地回退生成，因为所选 provider 当时不可用。",
+      unknownSummary: "这份草稿创建时没有记录生成来源。",
+      fallbackNotes: {
+        missing_api_key:
+          "当前 campaign 没有可用的 API key，所以系统改用本地回退草稿。",
+        invalid_api_key:
+          "当前 provider 的 API key 无效，所以系统改用本地回退草稿。",
+        authentication_error:
+          "当前 provider 认证失败，所以系统改用本地回退草稿。",
+        insufficient_quota:
+          "当前 provider 额度不足，所以系统改用本地回退草稿。",
+        openai_request_failed:
+          "当前 provider 暂时不可用，所以系统改用本地回退草稿。",
+      },
+    } as const;
+  }
+
+  return {
+    eyebrow: "Generation source",
+    sourceLabel: "Generation mode",
+    providerLabel: "Provider",
+    modelLabel: "Model",
+    providerBadge: "LLM Provider",
+    fallbackBadge: "Fallback draft",
+    unknownBadge: "Unknown",
+    providerSummary: "This draft was generated by the configured LLM provider.",
+    fallbackSummary:
+      "This draft came from the local fallback generator because the configured provider was unavailable.",
+    unknownSummary: "This draft was created before generation provenance was recorded.",
+    fallbackNotes: {
+      missing_api_key:
+        "No API key was available, so the app used the local fallback draft.",
+      invalid_api_key:
+        "The configured provider API key was invalid, so the app used the local fallback draft.",
+      authentication_error:
+        "Provider authentication failed, so the app used the local fallback draft.",
+      insufficient_quota:
+        "Provider quota was exhausted, so the app used the local fallback draft.",
+      openai_request_failed:
+        "The provider was unavailable, so the app used the local fallback draft.",
+    },
+  } as const;
+}
+
+export function getQuestGenerationStatusLabel(
+  draft: Pick<QuestDraft, "generationMode">,
+  locale: Locale,
+) {
+  const copy = getQuestGenerationCopy(locale);
+
+  if (draft.generationMode === "provider" || draft.generationMode === "openai") {
+    return copy.providerBadge;
+  }
+
+  if (draft.generationMode === "fallback") {
+    return copy.fallbackBadge;
+  }
+
+  return copy.unknownBadge;
+}
