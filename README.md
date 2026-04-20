@@ -46,6 +46,7 @@ DATABASE_URL=file:./dev.db
 
 ```bash
 pnpm prisma migrate dev
+pnpm prisma:generate
 pnpm prisma validate
 ```
 
@@ -83,6 +84,17 @@ data/uploads/<campaignId>/
 Each saved file gets a timestamped, randomized filename so the original upload name does not need to be unique.
 
 ## Test And Validation Commands
+
+If you changed `prisma/schema.prisma` or pulled schema changes from another branch, refresh the Prisma client before typecheck or tests. A stale client can produce false-negative review noise that looks like broken app code.
+
+Recommended verification order:
+
+```bash
+pnpm prisma migrate dev
+pnpm prisma:generate
+pnpm typecheck
+pnpm vitest run
+```
 
 ```bash
 pnpm vitest run

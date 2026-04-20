@@ -6,6 +6,7 @@ import {
 const mocks = vi.hoisted(() => ({
   campaignFindUnique: vi.fn(),
   importBatchFindFirst: vi.fn(),
+  importBatchUpdateMany: vi.fn(),
   importBatchUpdate: vi.fn(),
   importBatchFileUpdate: vi.fn(),
   sourceDocumentCreate: vi.fn(),
@@ -26,6 +27,7 @@ function createDependencies() {
       },
       importBatch: {
         findFirst: mocks.importBatchFindFirst,
+        updateMany: mocks.importBatchUpdateMany,
         update: mocks.importBatchUpdate,
       },
       importBatchFile: {
@@ -50,7 +52,7 @@ function createDependencies() {
 
 describe("processImportBatch", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
 
     mocks.campaignFindUnique.mockResolvedValue({
       id: "camp_1",
@@ -81,6 +83,7 @@ describe("processImportBatch", () => {
         },
       ],
     });
+    mocks.importBatchUpdateMany.mockResolvedValue({ count: 1 });
     mocks.resolveLlmProvider.mockReturnValue({
       config: {
         llmProvider: "openai_chat",
@@ -106,7 +109,88 @@ describe("processImportBatch", () => {
         chunkIndex: data.chunkIndex,
       }),
     );
+    mocks.importBatchUpdate.mockImplementation(
+      async ({ data }: { data: { status?: string } }) => ({
+        id: "batch_1",
+        campaignId: "camp_1",
+        status: data.status ?? "ready",
+      }),
+    );
     mocks.canonFactCreate.mockResolvedValue({ id: "fact_1" });
+  });
+
+  it("locks a ready batch atomically before any file work starts", async () => {
+    mocks.importBatchFindFirst
+      .mockResolvedValueOnce({
+        id: "batch_1",
+        campaignId: "camp_1",
+        status: "ready",
+        defaultSourceType: "official_module",
+        files: [],
+      })
+      .mockResolvedValueOnce({
+        id: "batch_1",
+        campaignId: "camp_1",
+        status: "ready",
+        defaultSourceType: "official_module",
+        files: [],
+      })
+      .mockResolvedValueOnce({
+        id: "batch_1",
+        campaignId: "camp_1",
+        status: "processing",
+        defaultSourceType: "official_module",
+        files: [],
+      });
+    mocks.importBatchUpdateMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 0 });
+
+    await expect(
+      processImportBatch({
+        campaignId: "camp_1",
+        batchId: "batch_1",
+        dependencies: createDependencies(),
+      }),
+    ).resolves.toMatchObject({
+      batchId: "batch_1",
+      batchStatus: "failed",
+    });
+
+    await expect(
+      processImportBatch({
+        campaignId: "camp_1",
+        batchId: "batch_1",
+        dependencies: createDependencies(),
+      }),
+    ).rejects.toMatchObject({
+      errorCode: "importBatchLocked",
+      status: 409,
+    });
+
+    expect(mocks.importBatchUpdateMany).toHaveBeenNthCalledWith(1, {
+      where: {
+        id: "batch_1",
+        campaignId: "camp_1",
+        status: "ready",
+      },
+      data: {
+        status: "processing",
+        startedAt: expect.any(Date),
+      },
+    });
+    expect(mocks.importBatchUpdateMany).toHaveBeenNthCalledWith(2, {
+      where: {
+        id: "batch_1",
+        campaignId: "camp_1",
+        status: "ready",
+      },
+      data: {
+        status: "processing",
+        startedAt: expect.any(Date),
+      },
+    });
+    expect(mocks.importBatchFileUpdate).not.toHaveBeenCalled();
   });
 
   it("creates source documents, chunks, and candidate facts while preserving batch metadata", async () => {

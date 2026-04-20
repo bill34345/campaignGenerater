@@ -8,6 +8,7 @@ import {
 } from "@/types/domain";
 import { SOURCE_TYPES } from "@/lib/imports/source-type";
 import {
+  attachDuplicateWarnings,
   detectDuplicateStagedFiles,
   saveStagedImportFiles,
   summarizeImportBatchReadiness,
@@ -219,6 +220,35 @@ describe("import staging schemas", () => {
     } finally {
       rmSync(rootDir, { recursive: true, force: true });
     }
+  });
+
+  it("does not assign duplicate warnings by filename alone", () => {
+    const files = [
+      {
+        id: "a",
+        originalName: "notes.md",
+        checksum: "dup",
+        status: "staged" as const,
+      },
+      {
+        id: "b",
+        originalName: "notes.md",
+        checksum: "unique",
+        status: "staged" as const,
+      },
+      {
+        id: "c",
+        originalName: "other.md",
+        checksum: "dup",
+        status: "staged" as const,
+      },
+    ];
+
+    const withWarnings = attachDuplicateWarnings(files);
+
+    expect(withWarnings.find((file) => file.id === "a")?.warnings).toHaveLength(1);
+    expect(withWarnings.find((file) => file.id === "c")?.warnings).toHaveLength(1);
+    expect(withWarnings.find((file) => file.id === "b")?.warnings).toHaveLength(0);
   });
 
   it("rejects unsupported files before staging them for processing", async () => {

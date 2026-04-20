@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test --pass-with-no-tests",
+    "prisma:generate": "powershell -ExecutionPolicy Bypass -File ./scripts/prisma-generate-safe.ps1",
     "typecheck": "tsc --noEmit",
     "gitnexus:analyze": "powershell -ExecutionPolicy Bypass -File ./scripts/gitnexus-analyze-safe.ps1"
   },

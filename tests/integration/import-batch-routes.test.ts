@@ -2,6 +2,7 @@ import { existsSync, rmSync } from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
+import { loadImportBatchResultSummary } from "@/lib/imports/result-summary";
 import { importBatchSchema } from "@/types/domain";
 import { GET, PATCH } from "@/app/api/campaigns/[campaignId]/imports/[batchId]/route";
 import { POST as PROCESS } from "@/app/api/campaigns/[campaignId]/imports/[batchId]/process/route";
@@ -578,6 +579,18 @@ describe("import batch routes", () => {
     );
 
     const campaign = await createCampaign();
+    await db.canonFact.create({
+      data: {
+        campaignId: campaign.id,
+        subject: "Father Lucian",
+        factType: "npc-role",
+        value: "Protects the abbey ledger.",
+        status: "active",
+        priority: 0,
+        confidence: 0.65,
+        evidence: "Previous campaign note",
+      },
+    });
     const createResponse = await POST(
       createUploadRequest([
         {
@@ -625,6 +638,18 @@ describe("import batch routes", () => {
       },
       batch: {
         status: "completed",
+      },
+    });
+
+    await expect(
+      loadImportBatchResultSummary(campaign.id, createdPayload.batch.id),
+    ).resolves.toMatchObject({
+      summary: {
+        successCount: 1,
+        failureCount: 0,
+        candidateFactCount: 1,
+        conflictCount: 1,
+        conflictSubjects: ["Father Lucian"],
       },
     });
   });

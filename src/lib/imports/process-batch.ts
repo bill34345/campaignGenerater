@@ -48,6 +48,7 @@ type ProcessBatchDb = {
   };
   importBatch: {
     findFirst: typeof db.importBatch.findFirst;
+    updateMany: typeof db.importBatch.updateMany;
     update: typeof db.importBatch.update;
   };
   importBatchFile: {
@@ -166,34 +167,20 @@ async function updateBatchFileFailure(
   });
 }
 
-async function loadProcessContext(
+async function loadCampaignContext(
   dbClient: ProcessBatchDependencies["db"],
   campaignId: string,
-  batchId: string,
-): Promise<{ campaign: CampaignRecord; batch: BatchRecord }> {
-  const [campaign, batch] = await Promise.all([
-    dbClient.campaign.findUnique({
-      where: { id: campaignId },
-      select: {
-        id: true,
-        llmProvider: true,
-        llmApiKey: true,
-        llmModel: true,
-        llmBaseUrl: true,
-      },
-    }),
-    dbClient.importBatch.findFirst({
-      where: {
-        id: batchId,
-        campaignId,
-      },
-      include: {
-        files: {
-          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-        },
-      },
-    }),
-  ]);
+): Promise<CampaignRecord> {
+  const campaign = await dbClient.campaign.findUnique({
+    where: { id: campaignId },
+    select: {
+      id: true,
+      llmProvider: true,
+      llmApiKey: true,
+      llmModel: true,
+      llmBaseUrl: true,
+    },
+  });
 
   if (!campaign) {
     throw new ImportBatchProcessingError(
@@ -203,6 +190,26 @@ async function loadProcessContext(
     );
   }
 
+  return campaign;
+}
+
+async function loadBatchContext(
+  dbClient: ProcessBatchDependencies["db"],
+  campaignId: string,
+  batchId: string,
+): Promise<BatchRecord> {
+  const batch = await dbClient.importBatch.findFirst({
+    where: {
+      id: batchId,
+      campaignId,
+    },
+    include: {
+      files: {
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      },
+    },
+  });
+
   if (!batch) {
     throw new ImportBatchProcessingError(
       "importBatchNotFound",
@@ -211,7 +218,7 @@ async function loadProcessContext(
     );
   }
 
-  return { campaign, batch };
+  return batch;
 }
 
 export async function processImportBatch({
@@ -220,23 +227,7 @@ export async function processImportBatch({
   dependencies,
 }: ProcessBatchOptions): Promise<ImportBatchProcessingResult> {
   const services = withDependencies(dependencies);
-  const { campaign, batch } = await loadProcessContext(services.db, campaignId, batchId);
-
-  if (batch.status === "processing") {
-    throw new ImportBatchProcessingError(
-      "importBatchLocked",
-      "This import batch is already processing.",
-      409,
-    );
-  }
-
-  if (batch.status === "completed") {
-    throw new ImportBatchProcessingError(
-      "importBatchLocked",
-      "This import batch has already been processed.",
-      409,
-    );
-  }
+  const campaign = await loadCampaignContext(services.db, campaignId);
 
   const { config, adapter } = services.resolveLlmProvider({
     llmProvider: llmProviderSchema.parse(campaign.llmProvider),
@@ -252,13 +243,29 @@ export async function processImportBatch({
     );
   }
 
-  await services.db.importBatch.update({
-    where: { id: batchId },
+  const lockResult = await services.db.importBatch.updateMany({
+    where: {
+      id: batchId,
+      campaignId,
+      status: "ready",
+    },
     data: {
       status: "processing",
       startedAt: new Date(),
     },
   });
+
+  if (lockResult.count !== 1) {
+    await loadBatchContext(services.db, campaignId, batchId);
+
+    throw new ImportBatchProcessingError(
+      "importBatchLocked",
+      "This import batch is already processing or no longer ready.",
+      409,
+    );
+  }
+
+  const batch = await loadBatchContext(services.db, campaignId, batchId);
 
   const createdFacts: Array<{ subject: string; factType: string }> = [];
   let successCount = 0;

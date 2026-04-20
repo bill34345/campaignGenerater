@@ -22,6 +22,7 @@ export type SaveStagedImportFilesInput = {
 };
 
 export type StagedImportFileRecord = {
+  id?: string;
   campaignId: string;
   importBatchId: string;
   originalName: string;
@@ -96,27 +97,51 @@ export function summarizeImportBatchReadiness(
 }
 
 export function attachDuplicateWarnings<
-  TFile extends Pick<StagedImportFileRecord, "checksum" | "originalName" | "status">,
+  TFile extends Pick<StagedImportFileRecord, "checksum" | "originalName" | "status"> & {
+    id?: string;
+  },
 >(files: readonly TFile[]): Array<TFile & { warnings: DuplicateChecksumWarning[] }> {
-  const duplicateChecksums = detectDuplicateStagedFiles(files);
-  const warningsByFileName = new Map<string, DuplicateChecksumWarning[]>();
+  const warningsByKey = new Map<string, DuplicateChecksumWarning[]>();
+  const filesWithKeys = files.map((file, index) => ({
+    ...file,
+    warningKey: file.id ?? `index:${index}`,
+  }));
+  const groupedByChecksum = new Map<string, typeof filesWithKeys>();
 
-  for (const duplicate of duplicateChecksums) {
-    for (const fileName of duplicate.fileNames) {
-      const warnings = warningsByFileName.get(fileName) ?? [];
+  for (const file of filesWithKeys) {
+    if (file.status !== "staged" || !file.checksum) {
+      continue;
+    }
+
+    const existing = groupedByChecksum.get(file.checksum) ?? [];
+    existing.push(file);
+    groupedByChecksum.set(file.checksum, existing);
+  }
+
+  for (const [checksum, duplicateFiles] of groupedByChecksum.entries()) {
+    if (duplicateFiles.length < 2) {
+      continue;
+    }
+
+    const warning = {
+      code: "duplicate_checksum" as const,
+      checksum,
+      fileNames: duplicateFiles.map((file) => file.originalName),
+    };
+
+    for (const duplicateFile of duplicateFiles) {
+      const warnings = warningsByKey.get(duplicateFile.warningKey) ?? [];
       warnings.push({
-        code: "duplicate_checksum",
-        checksum: duplicate.checksum,
-        fileNames: duplicate.fileNames,
+        ...warning,
       });
-      warningsByFileName.set(fileName, warnings);
+      warningsByKey.set(duplicateFile.warningKey, warnings);
     }
   }
 
-  return files.map((file) => ({
+  return filesWithKeys.map(({ warningKey, ...file }) => ({
     ...file,
-    warnings: warningsByFileName.get(file.originalName) ?? [],
-  }));
+    warnings: warningsByKey.get(file.id ?? warningKey) ?? [],
+  })) as unknown as Array<TFile & { warnings: DuplicateChecksumWarning[] }>;
 }
 
 export async function saveStagedImportFiles({

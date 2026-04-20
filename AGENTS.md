@@ -43,6 +43,7 @@ Prepare the database:
 
 ```bash
 pnpm prisma migrate dev
+pnpm prisma:generate
 pnpm prisma validate
 ```
 
@@ -224,12 +225,14 @@ pnpm playwright test --grep @negative
 - Do not make fact extraction silently fall back to fake data just to keep the UI green.
 - Do not assume live-provider compatibility from one gateway implies compatibility for all three protocols.
 - In PowerShell, bracketed App Router paths are easier to read with `-LiteralPath`.
+- If `prisma/schema.prisma` changed, run `pnpm prisma:generate` before `pnpm typecheck` or `pnpm vitest run`. A stale Prisma client can create false-negative failures like missing generated modules or missing table shapes.
 
 ## Before You Finish
 
 Before claiming a change is complete, run the smallest relevant set from here:
 
 ```bash
+pnpm prisma:generate
 pnpm lint
 pnpm typecheck
 pnpm vitest run
