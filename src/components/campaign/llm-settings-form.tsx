@@ -198,17 +198,26 @@ export function LlmSettingsForm({
       </div>
 
       {error ? (
-        <p className="mt-4 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+        <p
+          data-testid="llm-settings-error"
+          className="mt-4 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200"
+        >
           {error}
         </p>
       ) : null}
       {success ? (
-        <p className="mt-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+        <p
+          data-testid="llm-settings-saved"
+          className="mt-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200"
+        >
           {success}
         </p>
       ) : null}
       {testStatus ? (
-        <p className="mt-4 rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100">
+        <p
+          data-testid="llm-settings-test-success"
+          className="mt-4 rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100"
+        >
           {testStatus}
         </p>
       ) : null}
@@ -216,6 +225,7 @@ export function LlmSettingsForm({
       <div className="mt-6 flex flex-wrap gap-3">
         <button
           type="button"
+          data-testid="save-llm-settings"
           onClick={handleSave}
           disabled={isSaving}
           className="rounded-full bg-cyan-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-cyan-900 disabled:text-slate-300"
@@ -224,6 +234,7 @@ export function LlmSettingsForm({
         </button>
         <button
           type="button"
+          data-testid="test-llm-settings"
           onClick={handleTest}
           disabled={isTesting || isSaving}
           className="rounded-full border border-slate-700 px-5 py-3 text-sm font-semibold text-slate-100 transition hover:border-slate-500 hover:bg-slate-950 disabled:cursor-not-allowed disabled:border-slate-800 disabled:text-slate-500"

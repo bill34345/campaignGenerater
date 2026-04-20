@@ -47,8 +47,17 @@ export default async function CanonReviewPage({
     where: { campaignId },
     orderBy: [{ subject: "asc" }, { factType: "asc" }, { priority: "desc" }],
   });
+  const canonicalEntries = await db.canonicalEntry.findMany({
+    where: { campaignId },
+    orderBy: [{ subject: "asc" }, { factType: "asc" }],
+    include: {
+      sourceFacts: {
+        orderBy: [{ createdAt: "asc" }],
+      },
+    },
+  });
 
-  const merged = mergeCanonFacts(facts);
+  const merged = mergeCanonFacts(facts, canonicalEntries);
   const factGroupCount = merged.groups.reduce(
     (total, group) => total + group.factGroups.length,
     0,
@@ -116,6 +125,7 @@ export default async function CanonReviewPage({
           <CanonReviewTable
             campaignId={campaignId}
             initialGroups={merged.groups}
+            composerAvailable={true}
           />
         </section>
       </div>

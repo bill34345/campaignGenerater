@@ -17,7 +17,10 @@ export function GmPacketPreview({ draft }: GmPacketPreviewProps) {
   const { messages: m } = useLanguage();
 
   return (
-    <section className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+    <section
+      data-testid="gm-packet-preview"
+      className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6"
+    >
       <div className="border-b border-slate-800 pb-4">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-300">
           {m.gmPreview.eyebrow}

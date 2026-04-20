@@ -9,7 +9,7 @@ import {
   uploadDocument,
 } from "../support/workbench";
 
-test("@negative unsupported upload shows a visible localized error", async ({ page }) => {
+test("@negative unsupported upload shows a visible failed state", async ({ page }) => {
   await createCampaign(page, {
     campaignName: uniqueCampaignName("Invalid Upload"),
   });
@@ -22,7 +22,10 @@ test("@negative unsupported upload shows a visible localized error", async ({ pa
 
   await uploadDocument(page, fixturePath("unsupported-upload.json"));
 
+  await expect(page).toHaveURL(/\/campaigns\/[^/]+\/imports\/[^/?#]+$/);
+  await expect(page.getByText("unsupported-upload.json")).toBeVisible();
   await expect(
-    page.getByText(/Unsupported file type|不支持的文件类型/u).first(),
+    page.getByText(/The uploaded file format is not supported\./).first(),
   ).toBeVisible();
+  await expect(page.getByTestId("start-extraction")).toBeDisabled();
 });

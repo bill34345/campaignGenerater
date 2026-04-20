@@ -137,12 +137,18 @@ export function QuestEditor({
           </p>
         ) : null}
         {savedMessage ? (
-          <p className="mt-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+          <p
+            data-testid="quest-save-success"
+            className="mt-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200"
+          >
             {savedMessage}
           </p>
         ) : null}
 
-        <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+        <div
+          data-testid="quest-generation-meta"
+          className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-4"
+        >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
@@ -158,17 +164,25 @@ export function QuestEditor({
           </div>
 
           <div className="mt-3 grid gap-3 text-sm text-slate-300 md:grid-cols-3">
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/80 px-4 py-3">
+            <div
+              data-testid="quest-generation-source"
+              className="rounded-2xl border border-slate-800 bg-slate-900/80 px-4 py-3"
+            >
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                 {copy.sourceLabel}
               </p>
               <p className="mt-2 text-sm text-slate-100">{generationStatusLabel}</p>
             </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/80 px-4 py-3">
+            <div
+              data-testid="quest-generation-provider"
+              className="rounded-2xl border border-slate-800 bg-slate-900/80 px-4 py-3"
+            >
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                 {copy.providerLabel}
               </p>
-              <p className="mt-2 text-sm text-slate-100">{providerLabel}</p>
+              <p data-testid="quest-provider-value" className="mt-2 text-sm text-slate-100">
+                {providerLabel}
+              </p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-900/80 px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -183,7 +197,10 @@ export function QuestEditor({
           </div>
 
           {fallbackNote ? (
-            <p className="mt-3 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+            <p
+              data-testid="quest-fallback-note"
+              className="mt-3 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100"
+            >
               {fallbackNote}
             </p>
           ) : null}

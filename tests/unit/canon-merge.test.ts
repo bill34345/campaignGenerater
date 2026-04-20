@@ -81,7 +81,9 @@ describe("mergeCanonFacts", () => {
       activeFactId: "fact_2",
       conflict: true,
       candidateFactIds: ["fact_2", "fact_1", "fact_3"],
-      overriddenFactIds: ["fact_1"],
+      overriddenFactIds: [],
+      selectedFactIds: ["fact_2"],
+      canonicalEntry: null,
     });
     expect(bellTowerGroup?.activeFact?.value).toBe("Open all night");
     expect(bellTowerGroup?.candidates.map((fact) => fact.id)).toEqual([
@@ -91,7 +93,7 @@ describe("mergeCanonFacts", () => {
     ]);
     expect(bellTowerGroup?.candidates.map((fact) => fact.status)).toEqual([
       "active",
-      "overridden",
+      "active",
       "uncertain",
     ]);
 
@@ -120,10 +122,12 @@ describe("mergeCanonFacts", () => {
       conflict: false,
       candidateFactIds: ["fact_4"],
       overriddenFactIds: [],
+      selectedFactIds: ["fact_4"],
+      canonicalEntry: null,
     });
     expect(merged.allFacts.map((fact) => [fact.id, fact.status])).toEqual([
       ["fact_2", "active"],
-      ["fact_1", "overridden"],
+      ["fact_1", "active"],
       ["fact_3", "uncertain"],
       ["fact_4", "active"],
     ]);
@@ -177,6 +181,65 @@ describe("mergeCanonFacts", () => {
     expect(merged.allFacts.map((fact) => [fact.id, fact.status])).toEqual([
       ["fact_2", "overridden"],
       ["fact_1", "active"],
+    ]);
+  });
+
+  it("attaches canonical entries and selected evidence without rewriting candidate statuses", () => {
+    const merged = mergeCanonFacts(
+      [
+        {
+          id: "fact_1",
+          campaignId: "camp_1",
+          sourceDocumentId: "doc_1",
+          documentChunkId: "chunk_1",
+          subject: "Father Lucian",
+          factType: "npc_state",
+          value: "Alive and hiding relic evidence in the church cellar.",
+          status: "uncertain",
+          priority: 6,
+          confidence: 0.82,
+          evidence: "Session notes after the feast.",
+        },
+        {
+          id: "fact_2",
+          campaignId: "camp_1",
+          sourceDocumentId: "doc_2",
+          documentChunkId: "chunk_2",
+          subject: "Father Lucian",
+          factType: "npc_state",
+          value: "Alive, but publicly denying the relic exists.",
+          status: "uncertain",
+          priority: 5,
+          confidence: 0.71,
+          evidence: "Module chapter four marginalia.",
+        },
+      ],
+      [
+        {
+          id: "canon_1",
+          campaignId: "camp_1",
+          subject: "Father Lucian",
+          factType: "npc_state",
+          canonicalValue:
+            "Father Lucian is alive and hiding relic evidence in the church cellar.",
+          notes: null,
+          sourceFactIds: ["fact_1", "fact_2"],
+        },
+      ],
+    );
+
+    expect(merged.canonicalEntries).toHaveLength(1);
+    expect(merged.groups[0]?.factGroups[0]).toMatchObject({
+      canonicalEntry: expect.objectContaining({
+        id: "canon_1",
+        canonicalValue:
+          "Father Lucian is alive and hiding relic evidence in the church cellar.",
+      }),
+      selectedFactIds: ["fact_1", "fact_2"],
+    });
+    expect(merged.groups[0]?.factGroups[0]?.candidates.map((fact) => fact.status)).toEqual([
+      "uncertain",
+      "uncertain",
     ]);
   });
 

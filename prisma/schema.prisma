@@ -20,31 +20,81 @@ model Campaign {
   llmBaseUrl          String?
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
+  importBatches       ImportBatch[]
+  importBatchFiles    ImportBatchFile[]
   sourceDocuments     SourceDocument[]
   documentChunks      DocumentChunk[]
   canonFacts          CanonFact[]
+  canonicalEntries    CanonicalEntry[]
   campaignDeltas      CampaignDelta[]
   townProfiles        TownProfile[]
   questRequests       QuestRequest[]
   questDrafts         QuestDraft[]
 }
 
+model ImportBatch {
+  id                String            @id @default(cuid())
+  campaignId        String
+  status            String            @default("staged")
+  defaultSourceType String            @default("custom_reference")
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  campaign          Campaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  files             ImportBatchFile[]
+  sourceDocuments   SourceDocument[]
+
+  @@unique([id, campaignId])
+  @@index([campaignId, createdAt])
+  @@index([campaignId, status])
+}
+
+model ImportBatchFile {
+  id            String      @id @default(cuid())
+  importBatchId String
+  campaignId    String
+  originalName  String
+  storedPath    String?
+  mimeType      String?
+  checksum      String?
+  sizeBytes     Int?
+  sourceType    String
+  status        String      @default("staged")
+  errorCode     String?
+  errorMessage  String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  importBatch   ImportBatch @relation(fields: [importBatchId, campaignId], references: [id, campaignId], onDelete: Cascade)
+  campaign      Campaign    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([importBatchId, createdAt])
+  @@index([campaignId, status])
+}
+
 model SourceDocument {
   id              String          @id @default(cuid())
   campaignId      String
+  importBatchId   String?
   originalName    String
   storedPath      String
   mimeType        String
   checksum        String
+  sourceType      String          @default("custom_reference")
+  processingStatus String         @default("processed")
+  extractionError String?
   extractedText   String?
   pageCount       Int?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
   campaign        Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  importBatch     ImportBatch?    @relation(fields: [importBatchId, campaignId], references: [id, campaignId], onDelete: NoAction)
   chunks          DocumentChunk[]
   canonFacts      CanonFact[]
 
   @@index([campaignId, createdAt])
+  @@index([importBatchId])
+  @@index([campaignId, processingStatus])
 }
 
 model DocumentChunk {
@@ -70,7 +120,7 @@ model CanonFact {
   id               String          @id @default(cuid())
   campaignId       String
   sourceDocumentId String?
-  documentChunkId   String?
+  documentChunkId  String?
   subject          String
   factType         String
   value            String
@@ -83,10 +133,43 @@ model CanonFact {
   campaign         Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   sourceDocument   SourceDocument?  @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
   documentChunk    DocumentChunk?   @relation(fields: [documentChunkId], references: [id], onDelete: SetNull)
-  campaignDeltas   CampaignDelta[]   @relation("CanonFactAsSourceFact")
+  canonicalEntries CanonicalEntrySourceFact[]
+  campaignDeltas   CampaignDelta[]  @relation("CanonFactAsSourceFact")
 
+  @@unique([id, campaignId])
   @@index([campaignId, subject])
   @@index([campaignId, factType])
+}
+
+model CanonicalEntry {
+  id             String                     @id @default(cuid())
+  campaignId     String
+  subject        String
+  factType       String
+  canonicalValue String
+  notes          String?
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+  campaign       Campaign                   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  sourceFacts    CanonicalEntrySourceFact[]
+
+  @@unique([id, campaignId])
+  @@unique([campaignId, subject, factType])
+  @@index([campaignId, subject])
+  @@index([campaignId, factType])
+}
+
+model CanonicalEntrySourceFact {
+  id               String         @id @default(cuid())
+  campaignId       String
+  canonicalEntryId String
+  canonFactId      String
+  createdAt        DateTime       @default(now())
+  canonicalEntry   CanonicalEntry @relation(fields: [canonicalEntryId, campaignId], references: [id, campaignId], onDelete: Cascade)
+  canonFact        CanonFact      @relation(fields: [canonFactId, campaignId], references: [id, campaignId], onDelete: Cascade)
+
+  @@unique([canonicalEntryId, canonFactId])
+  @@index([canonFactId])
 }
 
 model CampaignDelta {

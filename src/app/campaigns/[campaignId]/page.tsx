@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { DocumentUploadForm } from "@/components/campaign/document-upload-form";
+import { ImportWorkbenchEntry } from "@/components/campaign/import-workbench-entry";
 import { getLlmProviderLabel, getLlmSettingsCopy } from "@/lib/i18n/llm-copy";
 import { getMessages, getRequestLocale, formatDateForLocale } from "@/lib/i18n/translate";
+import { serializeImportBatch } from "@/lib/imports/batch-payload";
 import { llmProviderSchema } from "@/types/domain";
 
 type CampaignOverviewPageProps = {
@@ -31,6 +32,22 @@ export default async function CampaignOverviewPage({
       llmProvider: true,
       llmApiKey: true,
       llmModel: true,
+      _count: {
+        select: {
+          sourceDocuments: true,
+          townProfiles: true,
+          questDrafts: true,
+        },
+      },
+      importBatches: {
+        orderBy: [{ createdAt: "desc" }],
+        take: 1,
+        include: {
+          files: {
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          },
+        },
+      },
       sourceDocuments: {
         orderBy: [{ createdAt: "desc" }],
         select: {
@@ -173,7 +190,7 @@ export default async function CampaignOverviewPage({
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">
               {m.campaignOverview.stats.importedFiles}
             </p>
-            <p className="mt-2 text-3xl font-semibold text-white">{campaign.sourceDocuments.length}</p>
+            <p className="mt-2 text-3xl font-semibold text-white">{campaign._count.sourceDocuments}</p>
           </div>
           <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">
@@ -185,18 +202,30 @@ export default async function CampaignOverviewPage({
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
               {m.campaignOverview.stats.currentTowns}
             </p>
-            <p className="mt-2 text-3xl font-semibold text-white">{campaign.townProfiles.length}</p>
+            <p className="mt-2 text-3xl font-semibold text-white">{campaign._count.townProfiles}</p>
           </div>
           <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-fuchsia-300">
               {m.campaignOverview.stats.recentQuests}
             </p>
-            <p className="mt-2 text-3xl font-semibold text-white">{campaign.questDrafts.length}</p>
+            <p className="mt-2 text-3xl font-semibold text-white">{campaign._count.questDrafts}</p>
           </div>
         </section>
 
         <section className="mt-8">
-          <DocumentUploadForm campaignId={campaignId} />
+          <ImportWorkbenchEntry
+            campaignId={campaignId}
+            latestBatch={
+              campaign.importBatches[0]
+                ? {
+                    id: campaign.importBatches[0].id,
+                    status: campaign.importBatches[0].status,
+                    createdAt: campaign.importBatches[0].createdAt.toISOString(),
+                    summary: serializeImportBatch(campaign.importBatches[0]).summary,
+                  }
+                : null
+            }
+          />
           <p className="mt-3 text-sm text-slate-400">
             {campaign.canonFacts.length > 0
               ? m.campaignOverview.empty.canonReady

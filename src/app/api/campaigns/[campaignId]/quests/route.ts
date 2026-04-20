@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { buildTownQuestContext } from "@/lib/canon/context-builder";
+import {
+  mergeCanonicalAndLegacyFacts,
+  projectCanonicalEntriesToCanonFacts,
+} from "@/lib/canon/context-projection";
 import { db } from "@/lib/db";
 import { runQuestGeneration } from "@/lib/quests/generation-run";
 import { validateQuestDraft } from "@/lib/quests/validate-quest";
@@ -166,7 +170,31 @@ export async function POST(request: Request, context: RouteContext) {
     locale: body.locale,
   } satisfies QuestRequest;
 
-  const [rawCanonFacts, deltas] = await Promise.all([
+  const [rawCanonicalEntries, rawCanonFacts, deltas] = await Promise.all([
+    db.canonicalEntry.findMany({
+      where: { campaignId },
+      include: {
+        sourceFacts: {
+          include: {
+            canonFact: {
+              select: {
+                id: true,
+                campaignId: true,
+                sourceDocumentId: true,
+                documentChunkId: true,
+                subject: true,
+                factType: true,
+                value: true,
+                status: true,
+                priority: true,
+                confidence: true,
+                evidence: true,
+              },
+            },
+          },
+        },
+      },
+    }),
     db.canonFact.findMany({
       where: { campaignId },
       select: {
@@ -210,6 +238,16 @@ export async function POST(request: Request, context: RouteContext) {
     const parsed = canonFactSchema.safeParse(fact);
     return parsed.success ? [parsed.data] : [];
   });
+  const projectedCanonicalFacts = projectCanonicalEntriesToCanonFacts(
+    rawCanonicalEntries.map((entry) => ({
+      ...entry,
+      sourceFactIds: entry.sourceFacts.map((sourceFact) => sourceFact.canonFactId),
+    })),
+  );
+  const resolvedCanonFacts = mergeCanonicalAndLegacyFacts(
+    projectedCanonicalFacts,
+    canonFacts.filter((fact) => fact.status === "active"),
+  );
   const workingContext = buildTownQuestContext({
     campaignId,
     campaignTone: campaign.tone,
@@ -217,7 +255,7 @@ export async function POST(request: Request, context: RouteContext) {
     town: townRecord
       ? toTownProfile(campaignId, townRecord)
       : toAdHocTownProfile(campaignId, body),
-    canonFacts,
+    canonFacts: resolvedCanonFacts,
     deltas,
   });
 

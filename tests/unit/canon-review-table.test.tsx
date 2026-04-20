@@ -1,13 +1,15 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CanonReviewTable } from "@/components/canon/canon-review-table";
 import { LanguageProvider } from "@/components/i18n/language-provider";
 import type { CanonEntityGroup } from "@/lib/canon/merge";
 
+const refreshMock = vi.fn();
+
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
-    refresh: vi.fn(),
+    refresh: refreshMock,
   }),
 }));
 
@@ -38,6 +40,8 @@ const initialGroups: CanonEntityGroup[] = [
         },
         candidateFactIds: ["fact_1", "fact_2"],
         overriddenFactIds: ["fact_2"],
+        selectedFactIds: ["fact_1"],
+        canonicalEntry: null,
         candidates: [
           {
             id: "fact_1",
@@ -95,6 +99,8 @@ const initialGroups: CanonEntityGroup[] = [
         },
         candidateFactIds: ["fact_3"],
         overriddenFactIds: [],
+        selectedFactIds: ["fact_3"],
+        canonicalEntry: null,
         candidates: [
           {
             id: "fact_3",
@@ -118,9 +124,10 @@ const initialGroups: CanonEntityGroup[] = [
 describe("CanonReviewTable", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    refreshMock.mockReset();
   });
 
-  it("disables all canon actions while an update is in flight", async () => {
+  it("disables compose actions while a quick save is in flight", async () => {
     let resolveFetch: ((value: Response) => void) | undefined;
     const fetchMock = vi.fn().mockImplementation(
       () =>
@@ -132,30 +139,30 @@ describe("CanonReviewTable", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(
-      <LanguageProvider initialLocale="zh" hasLocaleCookie={true}>
+      <LanguageProvider initialLocale="en" hasLocaleCookie={true}>
         <CanonReviewTable campaignId="camp_1" initialGroups={initialGroups} />
       </LanguageProvider>,
     );
 
-    const buttons = screen.getAllByRole("button");
-    fireEvent.click(buttons[0]);
+    const quickSaveButton = screen.getByRole("button", { name: /quick save/i });
+    fireEvent.click(quickSaveButton);
 
     await waitFor(() => {
-      expect(buttons.every((button) => (button as HTMLButtonElement).disabled)).toBe(
-        true,
-      );
+      expect(quickSaveButton).toBeDisabled();
+      expect(
+        screen
+          .getAllByRole("button", { name: /compose canon/i })
+          .every((button) => (button as HTMLButtonElement).disabled),
+      ).toBe(true);
+      expect(screen.getAllByRole("checkbox").every((checkbox) => checkbox.hasAttribute("disabled"))).toBe(true);
     });
 
-    resolveFetch?.(
-      new Response(JSON.stringify({ groups: initialGroups }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
-    );
-
-    await waitFor(() => {
-      expect(buttons.some((button) => (button as HTMLButtonElement).disabled)).toBe(
-        false,
+    await act(async () => {
+      resolveFetch?.(
+        new Response(JSON.stringify({ entry: { id: "canon_1" } }), {
+          status: 201,
+          headers: { "content-type": "application/json" },
+        }),
       );
     });
   });

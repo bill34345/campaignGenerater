@@ -20,6 +20,7 @@ export default async function HomePage() {
         <div className="mt-10 flex flex-wrap gap-4">
           <Link
             href="/campaigns/new"
+            data-testid="home-start-campaign"
             className="rounded-full bg-cyan-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300"
           >
             {m.home.primaryCta}

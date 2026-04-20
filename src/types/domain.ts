@@ -4,6 +4,33 @@ import { DEFAULT_LOCALE } from "@/lib/i18n/locales";
 const nonEmptyString = z.string().trim().min(1);
 const optionalNonEmptyString = nonEmptyString.optional().nullable();
 const factStatusSchema = z.enum(["active", "overridden", "uncertain"]);
+export const importSourceTypeSchema = z.enum([
+  "official_module",
+  "gm_notes",
+  "session_record",
+  "custom_reference",
+]);
+export const importBatchStatusSchema = z.enum([
+  "staged",
+  "ready",
+  "processing",
+  "completed",
+  "failed",
+]);
+export const importBatchFileStatusSchema = z.enum([
+  "staged",
+  "ready",
+  "processing",
+  "completed",
+  "failed",
+]);
+const importBatchFileWarningSchema = z
+  .object({
+    code: z.literal("duplicate_checksum"),
+    checksum: nonEmptyString,
+    fileNames: z.array(nonEmptyString).min(2),
+  })
+  .strict();
 export const llmProviderSchema = z.enum([
   "openai_responses",
   "openai_chat",
@@ -26,6 +53,23 @@ const fallbackReasonSchema = z.enum([
   "openai_request_failed",
 ]);
 
+function uniqueStringArraySchema(fieldName: string) {
+  return z.array(nonEmptyString).min(1).superRefine((values, context) => {
+    const seen = new Set<string>();
+
+    for (const value of values) {
+      if (seen.has(value)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `${fieldName} must not contain duplicates.`,
+        });
+        return;
+      }
+
+      seen.add(value);
+    }
+  });
+}
 export const createCampaignSchema = z
   .object({
     name: nonEmptyString,
@@ -81,6 +125,63 @@ export const campaignSummarySchema = z
 
 export type CampaignSummary = z.infer<typeof campaignSummarySchema>;
 
+export const importBatchFileSchema = z
+  .object({
+    id: nonEmptyString.optional(),
+    importBatchId: nonEmptyString.optional(),
+    campaignId: nonEmptyString.optional(),
+    originalName: nonEmptyString,
+    storedPath: nonEmptyString.optional(),
+    mimeType: nonEmptyString.optional(),
+    checksum: nonEmptyString.optional(),
+    sizeBytes: z.number().int().nonnegative().optional(),
+    sourceType: importSourceTypeSchema,
+    status: importBatchFileStatusSchema.default("staged"),
+    errorCode: z.string().trim().min(1).nullable().optional(),
+    errorMessage: z.string().trim().min(1).nullable().optional(),
+    warnings: z.array(importBatchFileWarningSchema).optional(),
+    createdAt: z.coerce.date().optional(),
+    updatedAt: z.coerce.date().optional(),
+  })
+  .strict();
+
+export type ImportBatchFile = z.infer<typeof importBatchFileSchema>;
+
+export const importBatchSchema = z
+  .object({
+    id: nonEmptyString.optional(),
+    campaignId: nonEmptyString,
+    status: importBatchStatusSchema.default("staged"),
+    defaultSourceType: importSourceTypeSchema,
+    startedAt: z.coerce.date().nullable().optional(),
+    completedAt: z.coerce.date().nullable().optional(),
+    createdAt: z.coerce.date().optional(),
+    updatedAt: z.coerce.date().optional(),
+    files: z.array(importBatchFileSchema).default([]),
+  })
+  .superRefine((batch, context) => {
+    for (const [index, file] of batch.files.entries()) {
+      if (file.importBatchId && batch.id && file.importBatchId !== batch.id) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "File importBatchId must match the parent batch id.",
+          path: ["files", index, "importBatchId"],
+        });
+      }
+
+      if (file.campaignId && file.campaignId !== batch.campaignId) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "File campaignId must match the parent campaignId.",
+          path: ["files", index, "campaignId"],
+        });
+      }
+    }
+  })
+  .strict();
+
+export type ImportBatch = z.infer<typeof importBatchSchema>;
+
 const questSceneSchema = z
   .object({
     name: nonEmptyString,
@@ -134,6 +235,57 @@ export const canonFactSchema = z
   .strict();
 
 export type CanonFact = z.infer<typeof canonFactSchema>;
+
+export const canonicalEntrySchema = z
+  .object({
+    id: nonEmptyString.optional(),
+    campaignId: nonEmptyString,
+    subject: nonEmptyString,
+    factType: nonEmptyString,
+    canonicalValue: nonEmptyString,
+    notes: z.string().trim().min(1).nullable().optional(),
+    sourceFactIds: uniqueStringArraySchema("sourceFactIds"),
+    createdAt: z.coerce.date().optional(),
+    updatedAt: z.coerce.date().optional(),
+  })
+  .strict();
+
+export type CanonicalEntry = z.infer<typeof canonicalEntrySchema>;
+
+export const canonComposerRequestSchema = z
+  .object({
+    campaignId: nonEmptyString,
+    subject: nonEmptyString,
+    factType: nonEmptyString,
+    selectedFactIds: uniqueStringArraySchema("selectedFactIds"),
+  })
+  .strict();
+
+export type CanonComposerRequest = z.infer<typeof canonComposerRequestSchema>;
+
+const canonComposerEvidenceSchema = z
+  .object({
+    factId: nonEmptyString,
+    subject: nonEmptyString,
+    factType: nonEmptyString,
+    value: nonEmptyString,
+    evidence: z.string().trim().min(1).nullable().optional(),
+  })
+  .strict();
+
+export const canonComposerDraftSchema = z
+  .object({
+    campaignId: nonEmptyString,
+    subject: nonEmptyString,
+    factType: nonEmptyString,
+    canonicalValue: nonEmptyString,
+    notes: z.string().trim().min(1).nullable().optional(),
+    selectedFactIds: uniqueStringArraySchema("selectedFactIds"),
+    evidence: z.array(canonComposerEvidenceSchema).min(1),
+  })
+  .strict();
+
+export type CanonComposerDraft = z.infer<typeof canonComposerDraftSchema>;
 
 export const townProfileSchema = z
   .object({

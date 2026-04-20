@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   campaignFindUnique: vi.fn(),
   townProfileFindFirst: vi.fn(),
   questRequestCreate: vi.fn(),
+  canonicalEntryFindMany: vi.fn(),
   canonFactFindMany: vi.fn(),
   campaignDeltaFindMany: vi.fn(),
   questDraftCreate: vi.fn(),
@@ -20,6 +21,9 @@ vi.mock("@/lib/db", () => ({
     },
     questRequest: {
       create: mocks.questRequestCreate,
+    },
+    canonicalEntry: {
+      findMany: mocks.canonicalEntryFindMany,
     },
     canonFact: {
       findMany: mocks.canonFactFindMany,
@@ -148,6 +152,7 @@ describe("quest generation route", () => {
       campaignId: "camp_1",
       ...createRequestBody(),
     });
+    mocks.canonicalEntryFindMany.mockResolvedValue([]);
     mocks.canonFactFindMany.mockResolvedValue([
       {
         id: "fact_1",

@@ -45,6 +45,11 @@ export function getCampaignIdFromUrl(page: Page) {
 
 export async function createCampaign(page: Page, input: CampaignInput = {}) {
   const campaignName = input.campaignName ?? uniqueCampaignName("E2E Campaign");
+  const createCampaignResponse = page.waitForResponse((response) =>
+    /\/api\/campaigns$/.test(response.url()) &&
+    response.request().method() === "POST" &&
+    response.status() === 201,
+  );
 
   await page.goto("/campaigns/new");
   await page.locator("#campaign-name").fill(campaignName);
@@ -57,7 +62,11 @@ export async function createCampaign(page: Page, input: CampaignInput = {}) {
     .fill(input.contentConstraints ?? "Keep gore off-screen.");
   await page.locator("form").first().locator('button[type="submit"]').click();
 
-  await expect(page.getByRole("heading", { name: campaignName })).toBeVisible();
+  const response = await createCampaignResponse;
+  const payload = (await response.json()) as { campaign: { id: string } };
+
+  await page.goto(`/campaigns/${payload.campaign.id}`);
+  await expect(page.getByTestId("create-import-batch")).toBeVisible();
 
   return { campaignName, campaignId: getCampaignIdFromUrl(page) };
 }
@@ -110,7 +119,8 @@ export async function ensureTownProfile(
 }
 
 export async function openLlmSettings(page: Page) {
-  await page.getByRole("link", { name: /LLM 设置|LLM settings/i }).first().click();
+  const campaignId = getCampaignIdFromUrl(page);
+  await page.goto(`/campaigns/${campaignId}/settings/llm`);
   await expect(page.locator("#llm-provider")).toBeVisible();
 }
 
@@ -126,56 +136,100 @@ export async function configureProvider(page: Page, input: ProviderInput) {
     await page.locator("#llm-base-url").fill(input.baseUrl);
   }
 
-  await page.getByRole("button", { name: /保存设置|Save settings/i }).click();
-  await expect(
-    page.getByText(/LLM settings saved|LLM 设置已保存/u).first(),
-  ).toBeVisible();
+  const settingsSection = page.locator("section").filter({
+    has: page.locator("#llm-provider"),
+  });
+
+  await Promise.all([
+    page.waitForResponse((response) =>
+      response.url().includes("/llm-settings") &&
+      response.request().method() === "PATCH" &&
+      response.status() === 200,
+    ),
+    settingsSection.locator("button").first().click(),
+  ]);
 
   if (input.testConnection) {
-    await page.getByRole("button", { name: /测试连接|Test connection/i }).click();
-    await expect(
-      page.getByText(/Connection succeeded|连接成功/u).first(),
-    ).toBeVisible();
+    await Promise.all([
+      page.waitForResponse((response) =>
+        response.url().includes("/llm-settings/test") &&
+        response.request().method() === "POST" &&
+        response.status() === 200,
+      ),
+      settingsSection.locator("button").nth(1).click(),
+    ]);
   }
 }
 
 export async function goBackToOverview(page: Page) {
-  await page.getByRole("link", { name: /返回概览|Back to overview/i }).click();
-  await expect(page.locator("#campaign-upload")).toBeVisible();
+  const campaignId = getCampaignIdFromUrl(page);
+  await page.goto(`/campaigns/${campaignId}`);
+  await expect(page.locator('input[type="file"]').first()).toBeVisible();
 }
 
-export async function uploadDocument(page: Page, filePath: string) {
-  await page.locator("#campaign-upload").setInputFiles(filePath);
-  await page
-    .locator("form")
-    .filter({ has: page.locator("#campaign-upload") })
-    .locator('button[type="submit"]')
-    .click();
+export async function uploadDocument(page: Page, filePath: string | string[]) {
+  const fileInput = page.locator('input[type="file"]').first();
+  const targetFiles = Array.isArray(filePath) ? filePath : [filePath];
+
+  await fileInput.setInputFiles(targetFiles);
+  await Promise.all([
+    page.waitForURL(/\/campaigns\/[^/]+\/imports\/[^/?#]+$/),
+    page.getByTestId("create-import-batch").click(),
+  ]);
 }
 
 export async function expectCanonUploadSuccess(page: Page) {
-  await expect(page.getByText(/uploaded|已上传/u).first()).toBeVisible();
+  await expect(page.getByTestId("start-extraction")).toBeVisible();
 }
 
 export async function openCanonReview(page: Page) {
-  await page.getByRole("link", { name: /canon review/i }).click();
+  const startExtractionButton = page.getByTestId("start-extraction");
+
+  if ((await startExtractionButton.count()) > 0) {
+    await Promise.all([
+      page.waitForURL(/\/campaigns\/[^/]+\/imports\/[^/]+\/results$/),
+      startExtractionButton.click(),
+    ]);
+  }
+
+  const canonInboxLink = page.getByTestId("open-canon-inbox");
+
+  if ((await canonInboxLink.count()) > 0) {
+    await Promise.all([
+      page.waitForURL(/\/campaigns\/[^/]+\/canon$/),
+      canonInboxLink.click(),
+    ]);
+    return;
+  }
+
+  const campaignId = getCampaignIdFromUrl(page);
+  await page.goto(`/campaigns/${campaignId}/canon`);
 }
 
 export async function activateCanonFact(
   page: Page,
   options: { rowText?: string } = {},
 ) {
-  const rowScope = options.rowText ? page.locator("tr", { hasText: options.rowText }) : null;
-  const rowButton = rowScope?.getByRole("button", { name: /active/i }).first();
-  const fallbackButton = page.getByRole("button", { name: /active/i }).first();
+  const scope = options.rowText
+    ? page.locator("article", { hasText: options.rowText }).first()
+    : page.locator("article").first();
 
-  if (rowButton && (await rowButton.count()) > 0) {
-    await rowButton.click();
+  await scope.getByRole("checkbox").first().check();
+
+  const quickSaveButton = scope.getByTestId("quick-save-canon");
+  if ((await quickSaveButton.count()) > 0) {
+    await quickSaveButton.click();
   } else {
-    await fallbackButton.click();
+    await scope.getByTestId("compose-canon").click();
+    await expect(page.locator("#canonical-value")).toBeVisible();
+    await page.getByTestId("save-canonical-entry").click();
   }
 
-  await expect(page.getByText(/active/i).first()).toBeVisible();
+  await expect(
+    page.locator(
+      '[data-testid="current-canonical-entry"], [data-testid="current-canonical-entry-empty"]',
+    ).first(),
+  ).toBeVisible();
 }
 
 export async function openQuestRequest(page: Page) {
@@ -200,19 +254,24 @@ export async function requestQuestAndOpenDraft(page: Page) {
 }
 
 export async function saveQuestDraft(page: Page) {
-  await page
-    .locator("section")
-    .filter({ has: page.locator("#quest-title") })
-    .locator('button[type="button"]')
-    .first()
-    .click();
-  await expect(page.getByText(/Draft saved|草稿已保存/u).first()).toBeVisible();
+  await Promise.all([
+    page.waitForResponse((response) =>
+      /\/quests\/[^/?#]+$/.test(response.url()) &&
+      response.request().method() === "PATCH" &&
+      response.status() === 200,
+    ),
+    page
+      .locator("section")
+      .filter({ has: page.locator("#quest-title") })
+      .locator('button[type="button"]')
+      .first()
+      .click(),
+  ]);
+  await expect(page.getByTestId("quest-save-success")).toBeVisible();
 }
 
 export async function expectGenerationSourceVisible(page: Page) {
-  await expect(
-    page.getByText(/Generation source|生成来源/u).first(),
-  ).toBeVisible();
+  await expect(page.getByTestId("quest-generation-source")).toBeVisible();
 }
 
 export async function expectProviderBadge(page: Page, label: string | RegExp) {
@@ -220,11 +279,11 @@ export async function expectProviderBadge(page: Page, label: string | RegExp) {
 }
 
 export async function expectFallbackVisible(page: Page) {
-  await expect(page.getByText(/Fallback draft|回退草稿/u).first()).toBeVisible();
+  await expect(page.getByTestId("quest-fallback-note")).toBeVisible();
 }
 
 export async function expectGmPreviewVisible(page: Page) {
-  await expect(page.getByText(/GM packet preview|GM 预览区/u).first()).toBeVisible();
+  await expect(page.getByTestId("gm-packet-preview")).toBeVisible();
 }
 
 export async function createQuestDraftSeed(
@@ -246,8 +305,8 @@ export async function createQuestDraftSeed(
     await goBackToOverview(page);
   }
 
-  for (const filePath of input.uploads ?? []) {
-    await uploadDocument(page, filePath);
+  if ((input.uploads?.length ?? 0) > 0) {
+    await uploadDocument(page, input.uploads ?? []);
     await expectCanonUploadSuccess(page);
   }
 

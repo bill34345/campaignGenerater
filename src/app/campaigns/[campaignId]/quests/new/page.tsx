@@ -4,6 +4,10 @@ import {
   buildTownQuestContext,
   type TownQuestContext,
 } from "@/lib/canon/context-builder";
+import {
+  mergeCanonicalAndLegacyFacts,
+  projectCanonicalEntriesToCanonFacts,
+} from "@/lib/canon/context-projection";
 import { QuestRequestForm } from "@/components/quests/quest-request-form";
 import { getMessages, getRequestLocale } from "@/lib/i18n/translate";
 import { canonFactSchema, type TownProfile } from "@/types/domain";
@@ -189,7 +193,31 @@ export default async function NewQuestPage({
     );
   }
 
-  const [rawCanonFacts, deltas] = await Promise.all([
+  const [rawCanonicalEntries, rawCanonFacts, deltas] = await Promise.all([
+    db.canonicalEntry.findMany({
+      where: { campaignId },
+      include: {
+        sourceFacts: {
+          include: {
+            canonFact: {
+              select: {
+                id: true,
+                campaignId: true,
+                sourceDocumentId: true,
+                documentChunkId: true,
+                subject: true,
+                factType: true,
+                value: true,
+                status: true,
+                priority: true,
+                confidence: true,
+                evidence: true,
+              },
+            },
+          },
+        },
+      },
+    }),
     db.canonFact.findMany({
       where: { campaignId },
       select: {
@@ -229,7 +257,22 @@ export default async function NewQuestPage({
     }),
   ]);
 
-  const inferredTownRecord = inferTownFromCanon(campaignId, rawCanonFacts);
+  const legacyCanonFacts = rawCanonFacts.flatMap((fact) => {
+    const parsed = canonFactSchema.safeParse(fact);
+
+    return parsed.success ? [parsed.data] : [];
+  });
+  const projectedCanonicalFacts = projectCanonicalEntriesToCanonFacts(
+    rawCanonicalEntries.map((entry) => ({
+      ...entry,
+      sourceFactIds: entry.sourceFacts.map((sourceFact) => sourceFact.canonFactId),
+    })),
+  );
+  const resolvedCanonFacts = mergeCanonicalAndLegacyFacts(
+    projectedCanonicalFacts,
+    legacyCanonFacts.filter((fact) => fact.status === "active"),
+  );
+  const inferredTownRecord = inferTownFromCanon(campaignId, resolvedCanonFacts);
   const selectedTownRecord =
     campaign.townProfiles.find((town) => town.id === townId) ??
     campaign.townProfiles[0] ??
@@ -269,17 +312,12 @@ export default async function NewQuestPage({
 
   const selectedTown = toTownProfile(campaignId, selectedTownRecord);
 
-  const canonFacts = rawCanonFacts.flatMap((fact) => {
-    const parsed = canonFactSchema.safeParse(fact);
-
-    return parsed.success ? [parsed.data] : [];
-  });
   const workingContext = buildTownQuestContext({
     campaignId,
     campaignTone: campaign.tone,
     partyLevel: campaign.partyLevel,
     town: selectedTown,
-    canonFacts,
+    canonFacts: resolvedCanonFacts,
     deltas,
   });
 

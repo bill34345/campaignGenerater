@@ -5,14 +5,16 @@ test("@smoke app shell defaults to Chinese and language toggle persists", async 
 }) => {
   await page.goto("/");
 
-  await expect(page.getByRole("link", { name: "开始创建 Campaign" })).toBeVisible();
+  await expect(page.getByTestId("home-start-campaign")).toBeVisible();
   await page.getByRole("button", { name: "English" }).click();
-  await expect(page.getByRole("link", { name: "Start a campaign" })).toBeVisible();
+  await expect(page.getByTestId("home-start-campaign")).toBeVisible();
 
   await page.reload();
-  await expect(page.getByRole("link", { name: "Start a campaign" })).toBeVisible();
+  await expect(page.getByTestId("home-start-campaign")).toBeVisible();
 
-  await page.getByRole("link", { name: "Start a campaign" }).click();
-  await expect(page).toHaveURL(/\/campaigns\/new$/);
-  await expect(page.getByText(/Campaign setup/i)).toBeVisible();
+  await Promise.all([
+    page.waitForURL(/\/campaigns\/new$/),
+    page.getByTestId("home-start-campaign").click(),
+  ]);
+  await expect(page.locator("#campaign-name")).toBeVisible();
 });

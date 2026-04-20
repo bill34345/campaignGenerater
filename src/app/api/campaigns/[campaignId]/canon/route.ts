@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { db } from "@/lib/db";
 import { mergeCanonFacts } from "@/lib/canon/merge";
+import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -18,32 +18,58 @@ const updateCanonFactSchema = z
   })
   .strict();
 
-export async function GET(_request: Request, context: RouteContext) {
-  const { campaignId } = await context.params;
-
-  const campaign = await db.campaign.findUnique({
-    where: { id: campaignId },
-    select: { id: true },
-  });
+async function loadCanonOverview(campaignId: string) {
+  const [facts, canonicalEntries, campaign] = await Promise.all([
+    db.canonFact.findMany({
+      where: { campaignId },
+      orderBy: [{ subject: "asc" }, { factType: "asc" }, { priority: "desc" }],
+    }),
+    db.canonicalEntry.findMany({
+      where: { campaignId },
+      orderBy: [{ subject: "asc" }, { factType: "asc" }],
+      include: {
+        sourceFacts: {
+          orderBy: [{ createdAt: "asc" }],
+        },
+      },
+    }),
+    db.campaign.findUnique({
+      where: { id: campaignId },
+      select: {
+        id: true,
+        llmApiKey: true,
+      },
+    }),
+  ]);
 
   if (!campaign) {
+    return null;
+  }
+
+  const merged = mergeCanonFacts(facts, canonicalEntries);
+
+  return {
+    groups: merged.groups,
+    conflictGroups: merged.conflictGroups,
+    canonicalEntries: merged.canonicalEntries,
+    composerMeta: {
+      providerConfigured: Boolean(campaign.llmApiKey),
+    },
+  };
+}
+
+export async function GET(_request: Request, context: RouteContext) {
+  const { campaignId } = await context.params;
+  const overview = await loadCanonOverview(campaignId);
+
+  if (!overview) {
     return NextResponse.json(
       { errorCode: "campaignNotFound", error: "Campaign not found." },
       { status: 404 },
     );
   }
 
-  const facts = await db.canonFact.findMany({
-    where: { campaignId },
-    orderBy: [{ subject: "asc" }, { factType: "asc" }, { priority: "desc" }],
-  });
-
-  const merged = mergeCanonFacts(facts);
-
-  return NextResponse.json({
-    groups: merged.groups,
-    conflictGroups: merged.conflictGroups,
-  });
+  return NextResponse.json(overview);
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
@@ -93,7 +119,6 @@ export async function PATCH(request: Request, context: RouteContext) {
       select: {
         id: true,
         priority: true,
-        status: true,
       },
     });
 
@@ -132,15 +157,14 @@ export async function PATCH(request: Request, context: RouteContext) {
     });
   }
 
-  const facts = await db.canonFact.findMany({
-    where: { campaignId },
-    orderBy: [{ subject: "asc" }, { factType: "asc" }, { priority: "desc" }],
-  });
+  const overview = await loadCanonOverview(campaignId);
 
-  const merged = mergeCanonFacts(facts);
+  if (!overview) {
+    return NextResponse.json(
+      { errorCode: "campaignNotFound", error: "Campaign not found." },
+      { status: 404 },
+    );
+  }
 
-  return NextResponse.json({
-    groups: merged.groups,
-    conflictGroups: merged.conflictGroups,
-  });
+  return NextResponse.json(overview);
 }

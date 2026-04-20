@@ -1,4 +1,9 @@
-import { canonFactSchema, type CanonFact } from "@/types/domain";
+import {
+  canonicalEntrySchema,
+  canonFactSchema,
+  type CanonFact,
+  type CanonicalEntry,
+} from "@/types/domain";
 
 export type CanonFactGroup = {
   key: string;
@@ -9,6 +14,8 @@ export type CanonFactGroup = {
   conflict: boolean;
   candidateFactIds: string[];
   overriddenFactIds: string[];
+  selectedFactIds: string[];
+  canonicalEntry: CanonicalEntry | null;
   candidates: CanonFact[];
 };
 
@@ -23,10 +30,15 @@ export type CanonMergeResult = {
   allFacts: CanonFact[];
   groups: CanonEntityGroup[];
   conflictGroups: CanonEntityGroup[];
+  canonicalEntries: CanonicalEntry[];
 };
 
 const factGroupKeyForFact = (fact: Pick<CanonFact, "subject" | "factType">) =>
   `${fact.subject}::${fact.factType}`;
+
+const factGroupKeyForEntry = (
+  entry: Pick<CanonicalEntry, "subject" | "factType">,
+) => `${entry.subject}::${entry.factType}`;
 
 const prioritySort = (left: CanonFact, right: CanonFact) =>
   right.priority - left.priority ||
@@ -56,59 +68,90 @@ function sanitizeCanonFactInput(input: unknown): unknown {
   };
 }
 
-const normalizeFactGroup = (key: string, facts: CanonFact[]): CanonFactGroup => {
+function sanitizeCanonicalEntryInput(input: unknown): unknown {
+  if (typeof input !== "object" || input === null) {
+    return input;
+  }
+
+  const entry = input as Record<string, unknown>;
+  const sourceFacts = Array.isArray(entry.sourceFacts) ? entry.sourceFacts : [];
+  const sourceFactIds =
+    Array.isArray(entry.sourceFactIds) && entry.sourceFactIds.every((id) => typeof id === "string")
+      ? (entry.sourceFactIds as string[])
+      : sourceFacts
+          .map((sourceFact) => {
+            if (typeof sourceFact !== "object" || sourceFact === null) {
+              return null;
+            }
+
+            const relation = sourceFact as Record<string, unknown>;
+
+            return typeof relation.canonFactId === "string" ? relation.canonFactId : null;
+          })
+          .filter((id): id is string => Boolean(id));
+
+  return {
+    id: entry.id,
+    campaignId: entry.campaignId,
+    subject: entry.subject,
+    factType: entry.factType,
+    canonicalValue: entry.canonicalValue,
+    notes: entry.notes,
+    sourceFactIds,
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
+  };
+}
+
+const normalizeFactGroup = (
+  key: string,
+  facts: CanonFact[],
+  canonicalEntry: CanonicalEntry | null,
+): CanonFactGroup => {
   const candidates = [...facts].sort(prioritySort);
-  let activeFactAssigned = false;
-
-  const normalizedCandidates = candidates.map((fact) => {
-    if (fact.status === "uncertain" || fact.status === "overridden") {
-      return fact;
-    }
-
-    if (!activeFactAssigned) {
-      activeFactAssigned = true;
-      return {
-        ...fact,
-        status: "active" as const,
-      };
-    }
-
-    return {
-      ...fact,
-      status: "overridden" as const,
-    };
-  });
-
-  const activeFact =
-    normalizedCandidates.find((fact) => fact.status === "active") ?? null;
+  const activeFact = candidates.find((fact) => fact.status === "active") ?? null;
   const distinctValues = new Set(
-    normalizedCandidates.map((fact) => fact.value.trim().toLowerCase()),
+    candidates.map((fact) => fact.value.trim().toLowerCase()),
   );
+  const selectedFactIds =
+    canonicalEntry?.sourceFactIds.length
+      ? canonicalEntry.sourceFactIds
+      : activeFact?.id
+        ? [activeFact.id]
+        : [];
 
   return {
     key,
-    subject: candidates[0]?.subject ?? "",
-    factType: candidates[0]?.factType ?? "",
+    subject: candidates[0]?.subject ?? canonicalEntry?.subject ?? "",
+    factType: candidates[0]?.factType ?? canonicalEntry?.factType ?? "",
     activeFactId: activeFact?.id ?? null,
     activeFact,
     conflict: distinctValues.size > 1,
-    candidateFactIds: normalizedCandidates
+    candidateFactIds: candidates
       .map((fact) => fact.id)
       .filter((id): id is string => Boolean(id)),
-    overriddenFactIds: normalizedCandidates
+    overriddenFactIds: candidates
       .filter((fact) => fact.status === "overridden")
       .map((fact) => fact.id)
       .filter((id): id is string => Boolean(id)),
-    candidates: normalizedCandidates,
+    selectedFactIds,
+    canonicalEntry,
+    candidates,
   };
 };
 
-export function mergeCanonFacts(inputFacts: readonly unknown[]): CanonMergeResult {
+export function mergeCanonFacts(
+  inputFacts: readonly unknown[],
+  inputCanonicalEntries: readonly unknown[] = [],
+): CanonMergeResult {
   const parsedFacts = inputFacts.map((fact) =>
     canonFactSchema.parse(sanitizeCanonFactInput(fact)),
   );
-  const groupedFacts = new Map<string, CanonFact[]>();
+  const parsedCanonicalEntries = inputCanonicalEntries.map((entry) =>
+    canonicalEntrySchema.parse(sanitizeCanonicalEntryInput(entry)),
+  );
 
+  const groupedFacts = new Map<string, CanonFact[]>();
   for (const fact of parsedFacts) {
     const key = factGroupKeyForFact(fact);
     const existing = groupedFacts.get(key);
@@ -121,8 +164,22 @@ export function mergeCanonFacts(inputFacts: readonly unknown[]): CanonMergeResul
     groupedFacts.set(key, [fact]);
   }
 
-  const factGroups = Array.from(groupedFacts.entries())
-    .map(([key, facts]) => normalizeFactGroup(key, facts))
+  const canonicalEntryByGroupKey = new Map(
+    parsedCanonicalEntries.map((entry) => [factGroupKeyForEntry(entry), entry]),
+  );
+  const allGroupKeys = new Set([
+    ...groupedFacts.keys(),
+    ...canonicalEntryByGroupKey.keys(),
+  ]);
+
+  const factGroups = Array.from(allGroupKeys)
+    .map((key) =>
+      normalizeFactGroup(
+        key,
+        groupedFacts.get(key) ?? [],
+        canonicalEntryByGroupKey.get(key) ?? null,
+      ),
+    )
     .sort(
       (left, right) =>
         left.subject.localeCompare(right.subject) ||
@@ -130,7 +187,6 @@ export function mergeCanonFacts(inputFacts: readonly unknown[]): CanonMergeResul
     );
 
   const groupedEntities = new Map<string, CanonFactGroup[]>();
-
   for (const group of factGroups) {
     const existing = groupedEntities.get(group.subject);
 
@@ -157,5 +213,6 @@ export function mergeCanonFacts(inputFacts: readonly unknown[]): CanonMergeResul
     allFacts: factGroups.flatMap((group) => group.candidates),
     groups,
     conflictGroups: groups.filter((group) => group.conflict),
+    canonicalEntries: parsedCanonicalEntries,
   };
 }
