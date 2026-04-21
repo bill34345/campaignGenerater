@@ -36,6 +36,7 @@ export const llmProviderSchema = z.enum([
   "openai_chat",
   "anthropic",
 ]);
+export const questRequestModeSchema = z.enum(["standard", "quick_start"]);
 const conflictTypeSchema = z.enum([
   "social",
   "investigation",
@@ -306,6 +307,7 @@ export const questRequestSchema = z
     id: nonEmptyString.optional(),
     campaignId: nonEmptyString,
     townProfileId: optionalNonEmptyString,
+    requestMode: questRequestModeSchema.default("standard"),
     townName: nonEmptyString,
     locale: z.enum(["zh", "en"]).default(DEFAULT_LOCALE),
     townVibe: z.string().trim().min(1).optional().nullable(),

@@ -89,7 +89,7 @@ function questTypeMatches(
 
 export function validateQuestDraft(
   draft: Partial<QuestDraft>,
-  request?: Pick<QuestRequest, "questType" | "townName">,
+  request?: Pick<QuestRequest, "questType" | "townName" | "requestMode">,
 ): QuestValidationResult {
   const errors: string[] = [];
 
@@ -128,6 +128,20 @@ export function validateQuestDraft(
 
   if ((draft.rewards?.length ?? 0) < 1) {
     errors.push("At least one reward is required.");
+  }
+
+  if (request?.requestMode === "quick_start") {
+    if ((draft.scenes?.length ?? 0) < 3) {
+      errors.push("Quick Start drafts must include at least 3 scenes.");
+    }
+
+    if ((draft.npcs?.length ?? 0) < 2) {
+      errors.push("Quick Start drafts must include at least 2 NPCs.");
+    }
+
+    if ((draft.encounters?.length ?? 0) < 1) {
+      errors.push("Quick Start drafts must include at least 1 encounter.");
+    }
   }
 
   const schemaResult = questGenerationSchema.safeParse(toSchemaDraft(draft));

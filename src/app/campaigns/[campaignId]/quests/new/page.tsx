@@ -18,6 +18,7 @@ type NewQuestPageProps = {
   }>;
   searchParams: Promise<{
     townId?: string;
+    quick_start?: string;
   }>;
 };
 
@@ -138,7 +139,8 @@ export default async function NewQuestPage({
   const locale = await getRequestLocale();
   const m = getMessages(locale);
   const { campaignId } = await params;
-  const { townId } = await searchParams;
+  const { townId, quick_start } = await searchParams;
+  const isQuickStart = quick_start === "1";
 
   const campaign = await db.campaign.findUnique({
     where: { id: campaignId },
@@ -278,7 +280,7 @@ export default async function NewQuestPage({
     campaign.townProfiles[0] ??
     inferredTownRecord;
 
-  if (!selectedTownRecord) {
+  if (!isQuickStart && !selectedTownRecord) {
     return (
       <main className="min-h-screen bg-slate-950 px-6 py-12 text-slate-100">
         <div className="mx-auto max-w-4xl rounded-3xl border border-slate-800 bg-slate-900/60 p-8">
@@ -310,26 +312,55 @@ export default async function NewQuestPage({
     );
   }
 
-  const selectedTown = toTownProfile(campaignId, selectedTownRecord);
+  const quickStartSeedTown: TownProfile = {
+    id: `${campaignId}-quick-start-seed`,
+    campaignId,
+    name: m.quickStart.seedStatus.placeholderName,
+    vibe: null,
+    tension: null,
+    notes: null,
+    questHooks: [],
+  };
+  const selectedTown = selectedTownRecord
+    ? toTownProfile(campaignId, selectedTownRecord)
+    : quickStartSeedTown;
 
   const workingContext = buildTownQuestContext({
     campaignId,
     campaignTone: campaign.tone,
     partyLevel: campaign.partyLevel,
     town: selectedTown,
-    canonFacts: resolvedCanonFacts,
-    deltas,
+    canonFacts: isQuickStart ? [] : resolvedCanonFacts,
+    deltas: isQuickStart ? [] : deltas,
   });
 
-  const initialValues = {
-    townName: selectedTown.name,
-    townVibe: selectedTown.vibe ?? "",
-    localTension: selectedTown.tension ?? workingContext.openHooks[0] ?? "",
-    questType: "",
-    mainPlotRelation: workingContext.recentDeltas.length > 0 ? "follow-up" : "",
-    desiredLength: "standard",
-    extraContext: buildExtraContext(workingContext, locale),
-  };
+  const initialValues = isQuickStart
+    ? {
+        townName: selectedTownRecord?.name ?? "",
+        townVibe: selectedTownRecord?.vibe ?? "",
+        localTension: selectedTownRecord?.tension ?? workingContext.openHooks[0] ?? "",
+        questType: "mixed",
+        mainPlotRelation: "",
+        desiredLength: "3h",
+        extraContext: "",
+        requestMode: "quick_start" as const,
+      }
+    : {
+        townName: selectedTown.name,
+        townVibe: selectedTown.vibe ?? "",
+        localTension: selectedTown.tension ?? workingContext.openHooks[0] ?? "",
+        questType: "",
+        mainPlotRelation: workingContext.recentDeltas.length > 0 ? "follow-up" : "",
+        desiredLength: "standard",
+        extraContext: buildExtraContext(workingContext, locale),
+        requestMode: "standard" as const,
+      };
+  const standardQuestHref = townId
+    ? `/campaigns/${campaignId}/quests/new?townId=${townId}`
+    : `/campaigns/${campaignId}/quests/new`;
+  const quickStartHref = townId
+    ? `/campaigns/${campaignId}/quests/new?townId=${townId}&quick_start=1`
+    : `/campaigns/${campaignId}/quests/new?quick_start=1`;
 
   return (
     <main className="min-h-screen bg-slate-950 px-6 py-12 text-slate-100">
@@ -337,13 +368,13 @@ export default async function NewQuestPage({
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div className="max-w-3xl">
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-cyan-300">
-              {m.questNew.eyebrow}
+              {isQuickStart ? m.quickStart.title : m.questNew.eyebrow}
             </p>
             <h1 className="mt-3 text-4xl font-semibold tracking-tight text-white">
               {campaign.name}
             </h1>
             <p className="mt-4 text-sm leading-7 text-slate-300">
-              {m.questNew.intro}
+              {isQuickStart ? m.quickStart.formIntro : m.questNew.intro}
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -359,44 +390,83 @@ export default async function NewQuestPage({
             >
               {m.questNew.actions.reviewCanon}
             </Link>
+            <Link
+              href={isQuickStart ? standardQuestHref : quickStartHref}
+              className="rounded-full border border-cyan-500/40 px-4 py-2 text-sm font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-slate-900"
+            >
+              {isQuickStart ? m.quickStart.fullFormCta : m.quickStart.cta}
+            </Link>
           </div>
         </div>
 
-        <section className="mt-8 grid gap-4 sm:grid-cols-3">
-          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">
-              {m.questNew.stats.selectedTown}
-            </p>
-            <p className="mt-2 text-3xl font-semibold text-white">
-              {selectedTown.name}
-            </p>
-          </div>
-          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">
-              {m.questNew.stats.townFacts}
-            </p>
-            <p className="mt-2 text-3xl font-semibold text-white">
-              {workingContext.townFacts.length}
-            </p>
-          </div>
-          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
-              {m.questNew.stats.recentDeltas}
-            </p>
-            <p className="mt-2 text-3xl font-semibold text-white">
-              {workingContext.recentDeltas.length}
-            </p>
-          </div>
-        </section>
+        {isQuickStart ? (
+          <section className="mt-8 grid gap-4 sm:grid-cols-3">
+            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">
+                {m.questNew.sections.partyLevel}
+              </p>
+              <p className="mt-2 text-3xl font-semibold text-white">{campaign.partyLevel}</p>
+            </div>
+            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">
+                {m.quickStart.stats.existingTownSeeds}
+              </p>
+              <p className="mt-2 text-3xl font-semibold text-white">
+                {campaign.townProfiles.length}
+              </p>
+            </div>
+            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
+                {m.quickStart.stats.noSourceRequired}
+              </p>
+              <p className="mt-2 text-sm leading-7 text-slate-200">
+                {m.quickStart.description}
+              </p>
+            </div>
+          </section>
+        ) : (
+          <section className="mt-8 grid gap-4 sm:grid-cols-3">
+            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">
+                {m.questNew.stats.selectedTown}
+              </p>
+              <p className="mt-2 text-3xl font-semibold text-white">
+                {selectedTown.name}
+              </p>
+            </div>
+            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">
+                {m.questNew.stats.townFacts}
+              </p>
+              <p className="mt-2 text-3xl font-semibold text-white">
+                {workingContext.townFacts.length}
+              </p>
+            </div>
+            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
+                {m.questNew.stats.recentDeltas}
+              </p>
+              <p className="mt-2 text-3xl font-semibold text-white">
+                {workingContext.recentDeltas.length}
+              </p>
+            </div>
+          </section>
+        )}
 
         <div className="mt-8">
           <QuestRequestForm
             campaignId={campaignId}
+            mode={isQuickStart ? "quick_start" : "standard"}
             townOptions={campaign.townProfiles.map((town) => ({
               id: town.id,
               name: town.name,
             }))}
-            selectedTownId={campaign.townProfiles.some((town) => town.id === selectedTown.id) ? selectedTown.id : undefined}
+            selectedTownId={
+              !isQuickStart &&
+              campaign.townProfiles.some((town) => town.id === selectedTown.id)
+                ? selectedTown.id
+                : undefined
+            }
             initialValues={initialValues}
             workingContext={workingContext}
           />

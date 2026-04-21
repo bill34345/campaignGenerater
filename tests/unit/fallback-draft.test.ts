@@ -68,6 +68,7 @@ function createQuestRequest(overrides: Partial<QuestRequest> = {}): QuestRequest
     id: "req_1",
     campaignId: "camp_1",
     townProfileId: "town_1",
+    requestMode: "standard",
     townName: "Blackwater",
     locale: "zh",
     townVibe: "Foggy and suspicious",
@@ -133,5 +134,24 @@ describe("buildFallbackQuestDraft", () => {
 
     expect(standaloneDraft.returnToMainPlot).not.toEqual(followUpDraft.returnToMainPlot);
     expect(standaloneDraft.gmSummary).not.toEqual(followUpDraft.gmSummary);
+  });
+
+  it("builds a runnable quick start module with stronger structure", () => {
+    const draft = buildFallbackQuestDraft({
+      workingContext: createWorkingContext(),
+      questRequest: createQuestRequest({
+        locale: "en",
+        townProfileId: null,
+        requestMode: "quick_start",
+        townName: "Fog Harbor",
+        desiredLength: "3h",
+        mainPlotRelation: null,
+      }),
+    });
+
+    expect(draft.scenes.length).toBeGreaterThanOrEqual(4);
+    expect(draft.npcs).toHaveLength(2);
+    expect(draft.encounters.length).toBeGreaterThanOrEqual(1);
+    expect(draft.gmSummary).toContain("Quick Start");
   });
 });

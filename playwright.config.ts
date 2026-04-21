@@ -31,7 +31,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `pnpm dev --port ${testPort}`,
+    command: `powershell -ExecutionPolicy Bypass -File ./scripts/playwright-webserver.ps1 -Port ${testPort}`,
     url: testBaseUrl,
     reuseExistingServer: false,
     env: {

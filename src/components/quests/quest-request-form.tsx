@@ -1,11 +1,12 @@
 "use client";
 
+import React from "react";
 import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 import { useLanguage } from "@/components/i18n/language-provider";
 import type { ApiErrorCode } from "@/lib/i18n/messages";
-import type { QuestRequest } from "@/types/domain";
 import type { TownQuestContext } from "@/lib/canon/context-builder";
+import type { QuestRequest } from "@/types/domain";
 
 type QuestRequestFormValues = Pick<
   QuestRequest,
@@ -16,10 +17,12 @@ type QuestRequestFormValues = Pick<
   | "mainPlotRelation"
   | "desiredLength"
   | "extraContext"
+  | "requestMode"
 >;
 
 type QuestRequestFormProps = {
   campaignId: string;
+  mode?: QuestRequest["requestMode"];
   townOptions: Array<{
     id: string;
     name: string;
@@ -49,14 +52,32 @@ function normalizeOptionalText(value: string) {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function getQuickStartLengthOptions(locale: "zh" | "en") {
+  if (locale === "zh") {
+    return [
+      { value: "90m", label: "90 分钟" },
+      { value: "3h", label: "3 小时" },
+      { value: "2 sessions", label: "2 次团" },
+    ];
+  }
+
+  return [
+    { value: "90m", label: "90 minutes" },
+    { value: "3h", label: "3 hours" },
+    { value: "2 sessions", label: "2 sessions" },
+  ];
+}
+
 export function QuestRequestForm({
   campaignId,
+  mode = "standard",
   townOptions,
   selectedTownId,
   initialValues,
   workingContext,
 }: QuestRequestFormProps) {
   const { locale, messages: m } = useLanguage();
+  const isQuickStart = mode === "quick_start";
   const [townName, setTownName] = useState(initialValues.townName);
   const [townVibe, setTownVibe] = useState(initialValues.townVibe ?? "");
   const [localTension, setLocalTension] = useState(
@@ -67,7 +88,7 @@ export function QuestRequestForm({
     initialValues.mainPlotRelation ?? "",
   );
   const [desiredLength, setDesiredLength] = useState(
-    initialValues.desiredLength ?? "standard",
+    initialValues.desiredLength ?? (isQuickStart ? "3h" : "standard"),
   );
   const [extraContext, setExtraContext] = useState(
     initialValues.extraContext ?? "",
@@ -84,9 +105,11 @@ export function QuestRequestForm({
       })),
     [workingContext.recentDeltas],
   );
-  const npcFallback = locale === "zh" ? "暂无 NPC 摘要。" : "No NPC summary recorded.";
+  const npcFallback =
+    locale === "zh" ? "暂无 NPC 摘要。" : "No NPC summary recorded.";
   const factionFallback =
     locale === "zh" ? "暂无阵营摘要。" : "No faction summary recorded.";
+  const quickStartLengthOptions = getQuickStartLengthOptions(locale);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -101,15 +124,18 @@ export function QuestRequestForm({
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          townProfileId: selectedTownId ?? null,
+          townProfileId: isQuickStart ? null : selectedTownId ?? null,
           townName: townName.trim(),
           townVibe: normalizeOptionalText(townVibe),
           localTension: normalizeOptionalText(localTension),
           questType: normalizeOptionalText(questType),
-          mainPlotRelation: normalizeOptionalText(mainPlotRelation),
+          mainPlotRelation: isQuickStart
+            ? null
+            : normalizeOptionalText(mainPlotRelation),
           desiredLength: normalizeOptionalText(desiredLength),
           extraContext: normalizeOptionalText(extraContext),
           locale,
+          requestMode: isQuickStart ? "quick_start" : "standard",
         }),
       });
 
@@ -138,10 +164,11 @@ export function QuestRequestForm({
     <section className="grid gap-6 lg:grid-cols-[1.25fr_0.75fr]">
       <form
         onSubmit={handleSubmit}
+        data-testid={isQuickStart ? "quick-start-form" : "quest-request-form"}
         className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-cyan-950/20"
       >
         <div className="grid gap-6">
-          {townOptions.length > 0 ? (
+          {!isQuickStart && townOptions.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {townOptions.map((town) => {
                 const isActive = town.id === selectedTownId;
@@ -153,7 +180,7 @@ export function QuestRequestForm({
                     className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${
                       isActive
                         ? "bg-cyan-400 text-slate-950"
-                      : "border border-slate-700 text-slate-200 hover:border-slate-500 hover:bg-slate-950"
+                        : "border border-slate-700 text-slate-200 hover:border-slate-500 hover:bg-slate-950"
                     }`}
                   >
                     {town.name}
@@ -168,14 +195,19 @@ export function QuestRequestForm({
               htmlFor="town-name"
               className="text-sm font-semibold text-slate-100"
             >
-              {m.questRequest.labels.townName}
+              {isQuickStart
+                ? m.quickStart.labels.locationSeed
+                : m.questRequest.labels.townName}
             </label>
             <input
               id="town-name"
               name="townName"
               value={townName}
               onChange={(event) => setTownName(event.target.value)}
-              className="mt-2 w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-cyan-400"
+              className="mt-2 w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-cyan-400"
+              placeholder={
+                isQuickStart ? m.quickStart.placeholders.locationSeed : undefined
+              }
             />
           </div>
 
@@ -184,16 +216,22 @@ export function QuestRequestForm({
               htmlFor="town-vibe"
               className="text-sm font-semibold text-slate-100"
             >
-              {m.questRequest.labels.townVibe}
+              {isQuickStart
+                ? m.quickStart.labels.townVibe
+                : m.questRequest.labels.townVibe}
             </label>
             <textarea
               id="town-vibe"
               name="townVibe"
-              rows={3}
+              rows={isQuickStart ? 2 : 3}
               value={townVibe}
               onChange={(event) => setTownVibe(event.target.value)}
               className="mt-2 w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-cyan-400"
-              placeholder={m.questRequest.placeholders.townVibe}
+              placeholder={
+                isQuickStart
+                  ? m.quickStart.placeholders.townVibe
+                  : m.questRequest.placeholders.townVibe
+              }
             />
           </div>
 
@@ -202,26 +240,38 @@ export function QuestRequestForm({
               htmlFor="local-tension"
               className="text-sm font-semibold text-slate-100"
             >
-              {m.questRequest.labels.localTension}
+              {isQuickStart
+                ? m.quickStart.labels.localTension
+                : m.questRequest.labels.localTension}
             </label>
             <textarea
               id="local-tension"
               name="localTension"
-              rows={3}
+              rows={isQuickStart ? 2 : 3}
               value={localTension}
               onChange={(event) => setLocalTension(event.target.value)}
               className="mt-2 w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-cyan-400"
-              placeholder={m.questRequest.placeholders.localTension}
+              placeholder={
+                isQuickStart
+                  ? m.quickStart.placeholders.localTension
+                  : m.questRequest.placeholders.localTension
+              }
             />
           </div>
 
-          <div className="grid gap-6 sm:grid-cols-3">
+          <div
+            className={`grid gap-6 ${
+              isQuickStart ? "sm:grid-cols-2" : "sm:grid-cols-3"
+            }`}
+          >
             <div>
               <label
                 htmlFor="quest-type"
                 className="text-sm font-semibold text-slate-100"
               >
-                {m.questRequest.labels.questType}
+                {isQuickStart
+                  ? m.quickStart.labels.playStyle
+                  : m.questRequest.labels.questType}
               </label>
               <select
                 id="quest-type"
@@ -231,42 +281,58 @@ export function QuestRequestForm({
                 className="mt-2 w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-cyan-400"
               >
                 <option value="">{m.questRequest.options.chooseFocus}</option>
-                <option value="investigation">{m.questRequest.options.investigation}</option>
+                <option value="investigation">
+                  {m.questRequest.options.investigation}
+                </option>
                 <option value="social">{m.questRequest.options.social}</option>
                 <option value="combat">{m.questRequest.options.combat}</option>
-                <option value="exploration">{m.questRequest.options.exploration}</option>
+                <option value="exploration">
+                  {m.questRequest.options.exploration}
+                </option>
                 <option value="mixed">{m.questRequest.options.mixed}</option>
               </select>
             </div>
 
-            <div>
-              <label
-                htmlFor="main-plot-relation"
-                className="text-sm font-semibold text-slate-100"
-              >
-                {m.questRequest.labels.mainPlotRelation}
-              </label>
-              <select
-                id="main-plot-relation"
-                name="mainPlotRelation"
-                value={mainPlotRelation}
-                onChange={(event) => setMainPlotRelation(event.target.value)}
-                className="mt-2 w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-cyan-400"
-              >
-                <option value="">{m.questRequest.options.chooseConnection}</option>
-                <option value="standalone">{m.questRequest.options.standalone}</option>
-                <option value="foreshadow">{m.questRequest.options.foreshadow}</option>
-                <option value="follow-up">{m.questRequest.options.followUp}</option>
-                <option value="reveal">{m.questRequest.options.reveal}</option>
-              </select>
-            </div>
+            {!isQuickStart ? (
+              <div>
+                <label
+                  htmlFor="main-plot-relation"
+                  className="text-sm font-semibold text-slate-100"
+                >
+                  {m.questRequest.labels.mainPlotRelation}
+                </label>
+                <select
+                  id="main-plot-relation"
+                  name="mainPlotRelation"
+                  value={mainPlotRelation}
+                  onChange={(event) => setMainPlotRelation(event.target.value)}
+                  className="mt-2 w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-cyan-400"
+                >
+                  <option value="">
+                    {m.questRequest.options.chooseConnection}
+                  </option>
+                  <option value="standalone">
+                    {m.questRequest.options.standalone}
+                  </option>
+                  <option value="foreshadow">
+                    {m.questRequest.options.foreshadow}
+                  </option>
+                  <option value="follow-up">
+                    {m.questRequest.options.followUp}
+                  </option>
+                  <option value="reveal">{m.questRequest.options.reveal}</option>
+                </select>
+              </div>
+            ) : null}
 
             <div>
               <label
                 htmlFor="desired-length"
                 className="text-sm font-semibold text-slate-100"
               >
-                {m.questRequest.labels.desiredLength}
+                {isQuickStart
+                  ? m.quickStart.labels.sessionLength
+                  : m.questRequest.labels.desiredLength}
               </label>
               <select
                 id="desired-length"
@@ -276,9 +342,23 @@ export function QuestRequestForm({
                 className="mt-2 w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-cyan-400"
               >
                 <option value="">{m.questRequest.options.chooseScope}</option>
-                <option value="short">{m.questRequest.options.short}</option>
-                <option value="standard">{m.questRequest.options.standard}</option>
-                <option value="long">{m.questRequest.options.long}</option>
+                {isQuickStart
+                  ? quickStartLengthOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))
+                  : [
+                      <option key="short" value="short">
+                        {m.questRequest.options.short}
+                      </option>,
+                      <option key="standard" value="standard">
+                        {m.questRequest.options.standard}
+                      </option>,
+                      <option key="long" value="long">
+                        {m.questRequest.options.long}
+                      </option>,
+                    ]}
               </select>
             </div>
           </div>
@@ -288,16 +368,22 @@ export function QuestRequestForm({
               htmlFor="extra-context"
               className="text-sm font-semibold text-slate-100"
             >
-              {m.questRequest.labels.extraContext}
+              {isQuickStart
+                ? m.quickStart.labels.adventurePremise
+                : m.questRequest.labels.extraContext}
             </label>
             <textarea
               id="extra-context"
               name="extraContext"
-              rows={10}
+              rows={isQuickStart ? 6 : 10}
               value={extraContext}
               onChange={(event) => setExtraContext(event.target.value)}
               className="mt-2 w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-cyan-400"
-              placeholder={m.questRequest.placeholders.extraContext}
+              placeholder={
+                isQuickStart
+                  ? m.quickStart.placeholders.adventurePremise
+                  : m.questRequest.placeholders.extraContext
+              }
             />
           </div>
         </div>
@@ -322,7 +408,7 @@ export function QuestRequestForm({
 
         <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
           <p className="text-sm leading-6 text-slate-400">
-            {m.questRequest.helper}
+            {isQuickStart ? m.quickStart.compactHelper : m.questRequest.helper}
           </p>
           <button
             type="submit"
@@ -337,7 +423,9 @@ export function QuestRequestForm({
       <aside className="space-y-4">
         <div className="rounded-3xl border border-slate-800 bg-slate-900/50 p-6">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-300">
-            {m.questNew.sections.workingContext}
+            {isQuickStart
+              ? m.quickStart.title
+              : m.questNew.sections.workingContext}
           </p>
           <p className="mt-4 text-sm leading-7 text-slate-300">
             {m.questNew.sections.tone}: {workingContext.campaignTone}
@@ -348,74 +436,121 @@ export function QuestRequestForm({
           <p className="text-sm leading-7 text-slate-300">
             {m.questNew.sections.openHooks}: {workingContext.openHooks.length}
           </p>
+          <p className="mt-3 text-sm leading-7 text-slate-400">
+            {isQuickStart ? m.quickStart.description : m.questRequest.helper}
+          </p>
         </div>
 
-        <div className="rounded-3xl border border-slate-800 bg-slate-900/50 p-6">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-300">
-            {m.questNew.sections.relevantNpcs}
-          </p>
-          <ul className="mt-4 space-y-3 text-sm text-slate-300">
-            {workingContext.relevantNpcs.length > 0 ? (
-              workingContext.relevantNpcs.map((fact) => (
-                <li key={fact.id ?? `${fact.subject}-${fact.value}`}>
-                  <p className="font-medium text-slate-100">{fact.subject}</p>
-                  <p className="mt-1 text-slate-400">
-                    {renderFactSummary(fact.value, npcFallback)}
-                  </p>
-                </li>
-              ))
-            ) : (
-              <li className="text-slate-400">{m.questNew.sections.noNpcs}</li>
-            )}
-          </ul>
-        </div>
+        {isQuickStart ? (
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/50 p-6">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-300">
+              {m.quickStart.seedCardTitle}
+            </p>
+            <p className="mt-4 text-sm leading-7 text-slate-300">
+              {townName.trim().length > 0
+                ? townName
+                : m.quickStart.seedStatus.empty}
+            </p>
+            <p className="mt-2 text-sm leading-7 text-slate-400">
+              {localTension.trim().length > 0
+                ? localTension
+                : m.quickStart.seedStatus.tensionFallback}
+            </p>
+            {workingContext.openHooks.length > 0 ? (
+              <ul className="mt-4 space-y-2 text-sm text-slate-300">
+                {workingContext.openHooks.slice(0, 3).map((hook) => (
+                  <li
+                    key={hook}
+                    className="rounded-2xl border border-slate-800 bg-slate-950/60 px-3 py-2"
+                  >
+                    {hook}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : (
+          <>
+            <div className="rounded-3xl border border-slate-800 bg-slate-900/50 p-6">
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-300">
+                {m.questNew.sections.relevantNpcs}
+              </p>
+              <ul className="mt-4 space-y-3 text-sm text-slate-300">
+                {workingContext.relevantNpcs.length > 0 ? (
+                  workingContext.relevantNpcs.map((fact) => (
+                    <li key={fact.id ?? `${fact.subject}-${fact.value}`}>
+                      <p className="font-medium text-slate-100">
+                        {fact.subject}
+                      </p>
+                      <p className="mt-1 text-slate-400">
+                        {renderFactSummary(fact.value, npcFallback)}
+                      </p>
+                    </li>
+                  ))
+                ) : (
+                  <li className="text-slate-400">
+                    {m.questNew.sections.noNpcs}
+                  </li>
+                )}
+              </ul>
+            </div>
 
-        <div className="rounded-3xl border border-slate-800 bg-slate-900/50 p-6">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-300">
-            {m.questNew.sections.relevantFactions}
-          </p>
-          <ul className="mt-4 space-y-3 text-sm text-slate-300">
-            {workingContext.relevantFactions.length > 0 ? (
-              workingContext.relevantFactions.map((fact) => (
-                <li key={fact.id ?? `${fact.subject}-${fact.value}`}>
-                  <p className="font-medium text-slate-100">{fact.subject}</p>
-                  <p className="mt-1 text-slate-400">
-                    {renderFactSummary(fact.value, factionFallback)}
-                  </p>
-                </li>
-              ))
-            ) : (
-              <li className="text-slate-400">{m.questNew.sections.noFactions}</li>
-            )}
-          </ul>
-        </div>
+            <div className="rounded-3xl border border-slate-800 bg-slate-900/50 p-6">
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-300">
+                {m.questNew.sections.relevantFactions}
+              </p>
+              <ul className="mt-4 space-y-3 text-sm text-slate-300">
+                {workingContext.relevantFactions.length > 0 ? (
+                  workingContext.relevantFactions.map((fact) => (
+                    <li key={fact.id ?? `${fact.subject}-${fact.value}`}>
+                      <p className="font-medium text-slate-100">
+                        {fact.subject}
+                      </p>
+                      <p className="mt-1 text-slate-400">
+                        {renderFactSummary(fact.value, factionFallback)}
+                      </p>
+                    </li>
+                  ))
+                ) : (
+                  <li className="text-slate-400">
+                    {m.questNew.sections.noFactions}
+                  </li>
+                )}
+              </ul>
+            </div>
 
-        <div className="rounded-3xl border border-slate-800 bg-slate-900/50 p-6">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-fuchsia-300">
-            {m.questNew.sections.recentDeltas}
-          </p>
-          <ul className="mt-4 space-y-3 text-sm text-slate-300">
-            {deltaRows.length > 0 ? (
-              deltaRows.map((delta) => (
-                <li key={delta.id}>
-                  <p className="font-medium text-slate-100">{delta.summary}</p>
-                  <p className="mt-1 text-slate-500">
-                    {delta.createdAt.toLocaleDateString(
-                      locale === "zh" ? "zh-CN" : "en-US",
-                      {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      },
-                    )}
-                  </p>
-                </li>
-              ))
-            ) : (
-              <li className="text-slate-400">{m.questNew.sections.noDeltas}</li>
-            )}
-          </ul>
-        </div>
+            <div className="rounded-3xl border border-slate-800 bg-slate-900/50 p-6">
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-fuchsia-300">
+                {m.questNew.sections.recentDeltas}
+              </p>
+              <ul className="mt-4 space-y-3 text-sm text-slate-300">
+                {deltaRows.length > 0 ? (
+                  deltaRows.map((delta) => (
+                    <li key={delta.id}>
+                      <p className="font-medium text-slate-100">
+                        {delta.summary}
+                      </p>
+                      <p className="mt-1 text-slate-500">
+                        {delta.createdAt.toLocaleDateString(
+                          locale === "zh" ? "zh-CN" : "en-US",
+                          {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          },
+                        )}
+                      </p>
+                    </li>
+                  ))
+                ) : (
+                  <li className="text-slate-400">
+                    {m.questNew.sections.noDeltas}
+                  </li>
+                )}
+              </ul>
+            </div>
+          </>
+        )}
       </aside>
     </section>
   );

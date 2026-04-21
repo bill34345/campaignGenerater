@@ -21,6 +21,13 @@ export default async function QuestDraftPage({ params }: QuestDraftPageProps) {
       id: questId,
       campaignId,
     },
+    include: {
+      questRequest: {
+        select: {
+          requestMode: true,
+        },
+      },
+    },
   });
 
   if (!draftRecord) {
@@ -56,15 +63,26 @@ export default async function QuestDraftPage({ params }: QuestDraftPageProps) {
   }
 
   const draft = toQuestDraftRecord(draftRecord);
+  const isQuickStartDraft = draftRecord.questRequest?.requestMode === "quick_start";
 
   return (
     <main className="min-h-screen bg-slate-950 px-6 py-12 text-slate-100">
       <div className="mx-auto max-w-7xl">
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div className="max-w-3xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-cyan-300">
-              {m.questEditor.eyebrow}
-            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-sm font-semibold uppercase tracking-[0.3em] text-cyan-300">
+                {m.questEditor.eyebrow}
+              </p>
+              {isQuickStartDraft ? (
+                <span
+                  data-testid="quick-start-draft-badge"
+                  className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200"
+                >
+                  {m.quickStart.badge}
+                </span>
+              ) : null}
+            </div>
             <h1 className="mt-3 text-4xl font-semibold tracking-tight text-white">
               {draft.title}
             </h1>

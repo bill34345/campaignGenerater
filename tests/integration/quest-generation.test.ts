@@ -64,6 +64,7 @@ function createRequestBody() {
     mainPlotRelation: "foreshadow",
     desiredLength: "standard",
     extraContext: "Tie the payoff back to the cult.",
+    requestMode: "standard",
   };
 }
 
@@ -150,6 +151,7 @@ describe("quest generation route", () => {
     mocks.questRequestCreate.mockResolvedValue({
       id: "req_1",
       campaignId: "camp_1",
+      locale: "zh",
       ...createRequestBody(),
     });
     mocks.canonicalEntryFindMany.mockResolvedValue([]);
@@ -257,6 +259,136 @@ describe("quest generation route", () => {
         generationProvider: "openai_responses",
         generationModel: expect.any(String),
       }),
+    });
+  });
+
+  it("creates a quest draft in quick_start mode without imported canon", async () => {
+    const baseDraft = {
+      ...createGeneratedDraft(),
+      title: "The Fog Harbor Ledger",
+      premise: "Fog Harbor loses dockworkers every dusk while the bells ring off-beat.",
+      hook: "A dockside fixer begs the party to find the missing workers before the harbor shuts down.",
+      scenes: [
+        {
+          name: "Dockside panic",
+          goal: "Learn who vanished and why nobody will say it aloud",
+          summary: "The party gathers testimony from frightened stevedores in Fog Harbor.",
+          location: "Fog Harbor docks",
+          conflictType: "investigation" as const,
+          outcomeOptions: ["Identify the last work crew", "Calm the dockside crowd"],
+        },
+        {
+          name: "Bell tower lead",
+          goal: "Follow the clue chain into the harbor bells",
+          summary: "Broken maintenance records point the party toward the bell tower above Fog Harbor.",
+          location: "Fog Harbor bell tower",
+          conflictType: "exploration" as const,
+          outcomeOptions: ["Find the hidden ledger", "Reveal the false alibi"],
+        },
+        {
+          name: "Warehouse reckoning",
+          goal: "Confront the crew behind the disappearances",
+          summary: "A hidden warehouse under Fog Harbor holds the abducted workers and the payoff records.",
+          location: "Fog Harbor tide warehouse",
+          conflictType: "mixed" as const,
+          outcomeOptions: ["Free the workers", "Seize the payment ledger"],
+        },
+      ],
+      gmSummary:
+        "A quick-start Fog Harbor module that can be run in one night and hands one clear lead back to the campaign.",
+    };
+    const generatedDraft = {
+      ...baseDraft,
+      locale: "en" as const,
+      npcs: [
+        ...baseDraft.npcs,
+        {
+          name: "Watchkeeper Brine",
+          role: "Skeptical watch officer",
+          motivation: "Keep the docks calm until dawn",
+          secret: "He ignored the first missing-person report",
+        },
+      ],
+    };
+
+    mocks.townProfileFindFirst.mockResolvedValueOnce(null);
+    mocks.canonicalEntryFindMany.mockReset();
+    mocks.canonFactFindMany.mockReset();
+    mocks.campaignDeltaFindMany.mockReset();
+    mocks.questRequestCreate.mockResolvedValueOnce({
+      id: "req_quick_start",
+      campaignId: "camp_1",
+      townProfileId: null,
+      townName: "Fog Harbor",
+      townVibe: "Wet docks and tolling bells.",
+      localTension: "Dockworkers disappear after dusk.",
+      questType: "investigation",
+      mainPlotRelation: null,
+      desiredLength: "3h",
+      extraContext: "Adventure premise: find the missing dockworkers.",
+      locale: "en",
+      requestMode: "quick_start",
+    });
+    mocks.responsesParse.mockResolvedValueOnce({
+      output_parsed: generatedDraft,
+    });
+    mocks.questDraftCreate.mockResolvedValueOnce({
+      id: "draft_quick_start",
+      campaignId: "camp_1",
+      questRequestId: "req_quick_start",
+      generationMode: "provider",
+      generationProvider: "openai_responses",
+      generationModel: "gpt-5.4-mini",
+      fallbackReason: null,
+      generationErrorCode: null,
+      ...generatedDraft,
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/campaigns/camp_1/quests", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          townProfileId: null,
+          townName: "Fog Harbor",
+          townVibe: "Wet docks and tolling bells.",
+          localTension: "Dockworkers disappear after dusk.",
+          questType: "investigation",
+          mainPlotRelation: null,
+          desiredLength: "3h",
+          extraContext: "Adventure premise: find the missing dockworkers.",
+          locale: "en",
+          requestMode: "quick_start",
+        }),
+      }),
+      {
+        params: Promise.resolve({ campaignId: "camp_1" }),
+      },
+    );
+
+    expect(response.status).toBe(201);
+    expect(mocks.canonicalEntryFindMany).not.toHaveBeenCalled();
+    expect(mocks.canonFactFindMany).not.toHaveBeenCalled();
+    expect(mocks.campaignDeltaFindMany).not.toHaveBeenCalled();
+    expect(mocks.questRequestCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        townProfileId: null,
+        townName: "Fog Harbor",
+        requestMode: "quick_start",
+      }),
+    });
+
+    await expect(response.json()).resolves.toMatchObject({
+      questRequest: {
+        requestMode: "quick_start",
+        townProfileId: null,
+        townName: "Fog Harbor",
+      },
+      validation: {
+        valid: true,
+      },
     });
   });
 

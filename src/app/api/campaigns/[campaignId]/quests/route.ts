@@ -155,6 +155,7 @@ export async function POST(request: Request, context: RouteContext) {
     data: {
       campaignId,
       townProfileId: townRecord?.id ?? null,
+      requestMode: body.requestMode,
       townName: townRecord?.name ?? body.townName,
       townVibe: body.townVibe ?? null,
       localTension: body.localTension ?? null,
@@ -165,74 +166,87 @@ export async function POST(request: Request, context: RouteContext) {
       locale: body.locale,
     },
   });
-  const questRequest = {
-    ...createdQuestRequest,
+  const questRequest = questRequestSchema.parse({
+    id: createdQuestRequest.id,
+    campaignId: createdQuestRequest.campaignId,
+    townProfileId: createdQuestRequest.townProfileId,
+    townName: createdQuestRequest.townName,
     locale: body.locale,
-  } satisfies QuestRequest;
+    townVibe: createdQuestRequest.townVibe,
+    localTension: createdQuestRequest.localTension,
+    questType: createdQuestRequest.questType,
+    mainPlotRelation: createdQuestRequest.mainPlotRelation,
+    desiredLength: createdQuestRequest.desiredLength,
+    extraContext: createdQuestRequest.extraContext,
+    requestMode: body.requestMode,
+  }) satisfies QuestRequest;
 
-  const [rawCanonicalEntries, rawCanonFacts, deltas] = await Promise.all([
-    db.canonicalEntry.findMany({
-      where: { campaignId },
-      include: {
-        sourceFacts: {
+  const useThinContext = body.requestMode === "quick_start";
+  const [rawCanonicalEntries, rawCanonFacts, deltas] = useThinContext
+    ? [[], [], []]
+    : await Promise.all([
+        db.canonicalEntry.findMany({
+          where: { campaignId },
           include: {
-            canonFact: {
-              select: {
-                id: true,
-                campaignId: true,
-                sourceDocumentId: true,
-                documentChunkId: true,
-                subject: true,
-                factType: true,
-                value: true,
-                status: true,
-                priority: true,
-                confidence: true,
-                evidence: true,
+            sourceFacts: {
+              include: {
+                canonFact: {
+                  select: {
+                    id: true,
+                    campaignId: true,
+                    sourceDocumentId: true,
+                    documentChunkId: true,
+                    subject: true,
+                    factType: true,
+                    value: true,
+                    status: true,
+                    priority: true,
+                    confidence: true,
+                    evidence: true,
+                  },
+                },
               },
             },
           },
-        },
-      },
-    }),
-    db.canonFact.findMany({
-      where: { campaignId },
-      select: {
-        id: true,
-        campaignId: true,
-        sourceDocumentId: true,
-        documentChunkId: true,
-        subject: true,
-        factType: true,
-        value: true,
-        status: true,
-        priority: true,
-        confidence: true,
-        evidence: true,
-      },
-    }),
-    db.campaignDelta.findMany({
-      where: { campaignId },
-      orderBy: [{ createdAt: "desc" }],
-      take: 8,
-      select: {
-        id: true,
-        campaignId: true,
-        deltaType: true,
-        summary: true,
-        createdAt: true,
-        sourceFactId: true,
-        sourceFact: {
+        }),
+        db.canonFact.findMany({
+          where: { campaignId },
           select: {
             id: true,
+            campaignId: true,
+            sourceDocumentId: true,
+            documentChunkId: true,
             subject: true,
             factType: true,
             value: true,
+            status: true,
+            priority: true,
+            confidence: true,
+            evidence: true,
           },
-        },
-      },
-    }),
-  ]);
+        }),
+        db.campaignDelta.findMany({
+          where: { campaignId },
+          orderBy: [{ createdAt: "desc" }],
+          take: 8,
+          select: {
+            id: true,
+            campaignId: true,
+            deltaType: true,
+            summary: true,
+            createdAt: true,
+            sourceFactId: true,
+            sourceFact: {
+              select: {
+                id: true,
+                subject: true,
+                factType: true,
+                value: true,
+              },
+            },
+          },
+        }),
+      ]);
 
   const canonFacts = rawCanonFacts.flatMap((fact) => {
     const parsed = canonFactSchema.safeParse(fact);
@@ -255,8 +269,8 @@ export async function POST(request: Request, context: RouteContext) {
     town: townRecord
       ? toTownProfile(campaignId, townRecord)
       : toAdHocTownProfile(campaignId, body),
-    canonFacts: resolvedCanonFacts,
-    deltas,
+    canonFacts: useThinContext ? [] : resolvedCanonFacts,
+    deltas: useThinContext ? [] : deltas,
   });
 
   const { draft: generatedDraft, meta: generationMeta } = await runQuestGeneration({

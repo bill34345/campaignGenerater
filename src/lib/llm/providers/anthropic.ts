@@ -686,6 +686,7 @@ function toFactRecord(
 function buildQuestPrompt(workingContext: TownQuestContext, questRequest: QuestRequest) {
   const locale = questRequest.locale ?? "zh";
   const isChinese = locale === "zh";
+  const useQuickStart = questRequest.requestMode === "quick_start";
   const npcLines = workingContext.relevantNpcs
     .slice(0, 5)
     .map((fact) => `- ${fact.subject}: ${fact.value}`);
@@ -744,6 +745,35 @@ function buildQuestPrompt(workingContext: TownQuestContext, questRequest: QuestR
         system:
           "You generate structured side-quest drafts for tabletop campaigns, and you must strictly output in the requested language.",
       };
+
+  if (useQuickStart) {
+    return {
+      system: labels.system,
+      user: [
+        isChinese
+          ? "你正在生成一个 GM 今晚就能开跑的短模组。"
+          : "You are generating a self-contained short module a GM can run tonight.",
+        isChinese
+          ? "不要依赖已导入 canon；把这次输出写成自包含内容。"
+          : "Do not rely on imported canon. Make the output self-contained.",
+        isChinese
+          ? "结果必须包含：强钩子、3 到 5 个场景、至少 2 个关键 NPC、至少 1 个遭遇、奖励和清晰结尾。"
+          : "The result must include: a strong hook, 3 to 5 scenes, at least 2 key NPCs, at least 1 encounter, rewards, and a clear ending.",
+        isChinese
+          ? "按用户要求的时长控制节奏，优先保证同晚可跑。"
+          : "Use the requested session length to control pacing and optimize for same-night playability.",
+        "",
+        `${labels.campaignTone}: ${workingContext.campaignTone}`,
+        `${labels.partyLevel}: ${workingContext.partyLevel}`,
+        `${labels.town}: ${questRequest.townName || workingContext.town.name}`,
+        `${labels.townVibe}: ${questRequest.townVibe ?? workingContext.town.vibe ?? labels.unspecified}`,
+        `${labels.localTension}: ${questRequest.localTension ?? workingContext.town.tension ?? labels.unspecified}`,
+        `${labels.questType}: ${questRequest.questType ?? "mixed"}`,
+        `${labels.desiredLength}: ${questRequest.desiredLength ?? "3h"}`,
+        `${labels.extraContext}: ${questRequest.extraContext ?? labels.none}`,
+      ].join("\n"),
+    };
+  }
 
   return {
     system: labels.system,

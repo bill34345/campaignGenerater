@@ -206,6 +206,7 @@ model QuestRequest {
   id                String       @id @default(cuid())
   campaignId        String
   townProfileId     String?
+  requestMode       String       @default("standard")
   townName          String
   locale            String       @default("zh")
   townVibe          String?

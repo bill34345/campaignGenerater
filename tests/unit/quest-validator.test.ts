@@ -72,6 +72,7 @@ function createRequest(overrides: Partial<QuestRequest> = {}): QuestRequest {
   return {
     id: "req_1",
     campaignId: "camp_1",
+    requestMode: "standard",
     locale: "zh",
     townProfileId: "town_1",
     townName: "Blackwater",
@@ -200,5 +201,17 @@ describe("validateQuestDraft", () => {
 
     expect(result.valid).toBe(true);
     expect(result.errors).toEqual([]);
+  });
+
+  it("requires at least two NPCs for quick start drafts", () => {
+    const result = validateQuestDraft(
+      createDraft(),
+      createRequest({ requestMode: "quick_start" }),
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContain(
+      "Quick Start drafts must include at least 2 NPCs.",
+    );
   });
 });

@@ -44,6 +44,7 @@ describe("domain schemas", () => {
   it("parses quest requests with required campaign context", () => {
     const parsed = questRequestSchema.safeParse({
       campaignId: "camp_1",
+      requestMode: "standard",
       townName: "Vallaki",
       townProfileId: null,
       townVibe: null,
@@ -52,6 +53,24 @@ describe("domain schemas", () => {
       mainPlotRelation: null,
       desiredLength: "short",
       extraContext: null,
+    });
+
+    expect(parsed.success).toBe(true);
+  });
+
+  it("accepts quest requests in quick_start mode", () => {
+    const parsed = questRequestSchema.safeParse({
+      campaignId: "cmp_1",
+      townProfileId: null,
+      townName: "Fog Harbor",
+      locale: "en",
+      townVibe: "Wet docks, nervous bells, and shuttered inns.",
+      localTension: "People vanish at dusk.",
+      questType: "investigation",
+      mainPlotRelation: null,
+      desiredLength: "3h",
+      extraContext: "Adventure premise: find the missing dockworkers.",
+      requestMode: "quick_start",
     });
 
     expect(parsed.success).toBe(true);

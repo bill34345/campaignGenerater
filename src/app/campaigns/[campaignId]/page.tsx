@@ -177,6 +177,12 @@ export default async function CampaignOverviewPage({
               {m.campaignOverview.actions.requestQuest}
             </Link>
             <Link
+              href={`/campaigns/${campaignId}/quests/new?quick_start=1`}
+              className="rounded-full border border-cyan-500/40 px-4 py-2 text-sm font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-slate-900"
+            >
+              {m.quickStart.cta}
+            </Link>
+            <Link
               href={`/campaigns/${campaignId}/settings/llm`}
               className="rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-slate-500 hover:bg-slate-900"
             >
@@ -212,6 +218,72 @@ export default async function CampaignOverviewPage({
           </div>
         </section>
 
+        <section className="mt-8 grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+          <div className="rounded-3xl border border-cyan-500/20 bg-cyan-500/10 p-6">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-300">
+              {m.quickStart.title}
+            </p>
+            <h2 className="mt-3 text-2xl font-semibold text-white">
+              {m.quickStart.description}
+            </h2>
+            <p className="mt-3 text-sm leading-7 text-slate-300">
+              {campaign._count.sourceDocuments > 0
+                ? m.quickStart.seededHint.replace(
+                    "{count}",
+                    campaign._count.townProfiles.toString(),
+                  )
+                : m.quickStart.emptyHint}
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Link
+                href={`/campaigns/${campaignId}/quests/new?quick_start=1`}
+                data-testid="quick-start-cta"
+                className="rounded-full bg-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300"
+              >
+                {m.quickStart.cta}
+              </Link>
+              <Link
+                href={`/campaigns/${campaignId}/quests/new`}
+                className="rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-slate-500 hover:bg-slate-900"
+              >
+                {m.campaignOverview.actions.requestQuest}
+              </Link>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">
+              {m.quickStart.spotlightTitle}
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                  {m.quickStart.spotlight.noCanon.title}
+                </p>
+                <p className="mt-2 text-sm text-slate-300">
+                  {m.quickStart.spotlight.noCanon.description}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                  {m.quickStart.spotlight.fastSetup.title}
+                </p>
+                <p className="mt-2 text-sm text-slate-300">
+                  {m.quickStart.spotlight.fastSetup.description}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                  {m.quickStart.spotlight.sameEditor.title}
+                </p>
+                <p className="mt-2 text-sm text-slate-300">
+                  {m.quickStart.spotlight.sameEditor.description}
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section className="mt-8">
           <ImportWorkbenchEntry
             campaignId={campaignId}
@@ -229,7 +301,7 @@ export default async function CampaignOverviewPage({
           <p className="mt-3 text-sm text-slate-400">
             {campaign.canonFacts.length > 0
               ? m.campaignOverview.empty.canonReady
-              : m.campaignOverview.empty.uploadHint}
+              : m.quickStart.emptyHint}
           </p>
         </section>
 

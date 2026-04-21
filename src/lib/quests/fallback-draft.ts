@@ -606,6 +606,116 @@ function buildReturnPath(
   return base;
 }
 
+type QuickStartLength = "90m" | "3h" | "2 sessions";
+
+function asQuickStartLength(value: string | null | undefined): QuickStartLength {
+  switch (normalizeText(value).toLowerCase()) {
+    case "90m":
+    case "2 sessions":
+      return normalizeText(value).toLowerCase() as QuickStartLength;
+    default:
+      return "3h";
+  }
+}
+
+function mapQuickStartLengthToSupportedLength(
+  desiredLength: QuickStartLength,
+): SupportedLength {
+  if (desiredLength === "90m") {
+    return "short";
+  }
+
+  if (desiredLength === "2 sessions") {
+    return "long";
+  }
+
+  return "standard";
+}
+
+function buildQuickStartScenes(input: {
+  locale: Locale;
+  townName: string;
+  pressure: string;
+  baseScenes: SceneSeed[];
+  desiredLength: QuickStartLength;
+}): SceneSeed[] {
+  const bridgeScene: SceneSeed =
+    input.locale === "zh"
+      ? {
+          name: "压力升级",
+          goal: "把线索和城镇危机拧到一起",
+          summary: `新的证词显示 ${input.townName} 的危机比表面更近，必须马上行动。`,
+          location: `${input.townName} 的关键街区`,
+          conflictType: "social",
+          outcomeOptions: ["稳住局势", "锁定真正威胁"],
+        }
+      : {
+          name: "Pressure spike",
+          goal: "Bind the clue trail to the town crisis",
+          summary: `Fresh testimony shows ${input.townName}'s problem is more immediate than it first appeared.`,
+          location: `${input.townName}'s pressure point`,
+          conflictType: "social",
+          outcomeOptions: ["Stabilize the crowd", "Identify the real threat"],
+        };
+
+  const finaleScene: SceneSeed =
+    input.locale === "zh"
+      ? {
+          name: "收束与余波",
+          goal: "给今晚的冒险一个可执行结尾",
+          summary: `处理 ${input.pressure} 带来的余波，并把后续线索交回主线。`,
+          location: `${input.townName} 的善后现场`,
+          conflictType: "mixed",
+          outcomeOptions: ["留下清晰线索", "稳住本地秩序"],
+        }
+      : {
+          name: "Resolution and fallout",
+          goal: "Give the module a playable closing beat",
+          summary: `Deal with the fallout of ${input.pressure.toLowerCase()} and hand one clear lead back to the campaign.`,
+          location: `${input.townName}'s aftermath scene`,
+          conflictType: "mixed",
+          outcomeOptions: ["Leave a clear lead", "Stabilize the town"],
+        };
+
+  if (input.desiredLength === "90m") {
+    return input.baseScenes.slice(0, 3);
+  }
+
+  if (input.desiredLength === "2 sessions") {
+    return [...input.baseScenes.slice(0, 3), bridgeScene, finaleScene];
+  }
+
+  return [...input.baseScenes.slice(0, 3), bridgeScene];
+}
+
+function buildQuickStartEncounters(input: {
+  locale: Locale;
+  baseEncounters: EncounterSeed[];
+  townName: string;
+  desiredLength: QuickStartLength;
+}): EncounterSeed[] {
+  const wrapEncounter: EncounterSeed =
+    input.locale === "zh"
+      ? {
+          name: "余波阻击",
+          difficultyTarget: "medium",
+          purpose: `在 ${input.townName} 的结尾阶段制造最后压力`,
+          notes: "把时间压力、地形和目标保护结合起来。",
+        }
+      : {
+          name: "Aftershock interception",
+          difficultyTarget: "medium",
+          purpose: `Add one final pressure beat to ${input.townName}'s closing stretch`,
+          notes: "Combine time pressure, awkward terrain, and something worth protecting.",
+        };
+
+  if (input.desiredLength === "2 sessions") {
+    return [...input.baseEncounters, wrapEncounter];
+  }
+
+  return input.baseEncounters;
+}
+
 export function buildFallbackQuestDraft({
   workingContext,
   questRequest,
@@ -614,10 +724,15 @@ export function buildFallbackQuestDraft({
   questRequest: QuestRequest;
 }): QuestGenerationDraft {
   const locale = questRequest.locale ?? "zh";
+  const isQuickStart = questRequest.requestMode === "quick_start";
   const text = getText(locale);
   const townName = normalizeText(questRequest.townName) || workingContext.town.name;
   const questType = asQuestType(questRequest.questType);
-  const desiredLength = asDesiredLength(questRequest.desiredLength);
+  const desiredLength = isQuickStart
+    ? mapQuickStartLengthToSupportedLength(
+        asQuickStartLength(questRequest.desiredLength),
+      )
+    : asDesiredLength(questRequest.desiredLength);
   const relation = asMainPlotRelation(questRequest.mainPlotRelation);
   const pressure = pickFirst(
     [questRequest.localTension, workingContext.town.tension],
@@ -645,6 +760,79 @@ export function buildFallbackQuestDraft({
 
   const scenes = buildScenes(profile, desiredLength);
   const encounters = buildEncounters(text, profile, questType, desiredLength);
+
+  if (isQuickStart) {
+    const quickStartLength = asQuickStartLength(questRequest.desiredLength);
+    const quickStartScenes = buildQuickStartScenes({
+      locale,
+      townName,
+      pressure,
+      baseScenes: scenes,
+      desiredLength: quickStartLength,
+    });
+    const quickStartEncounters = buildQuickStartEncounters({
+      locale,
+      baseEncounters: encounters,
+      townName,
+      desiredLength: quickStartLength,
+    });
+    const supportNpc =
+      locale === "zh"
+        ? `质疑一切的 ${townName} 守夜人`
+        : `The skeptical watchkeeper of ${townName}`;
+
+    return {
+      locale,
+      title: text.questTitle(townName, profile.suffix),
+      premise: text.premise(townName, pressure, profile.angle),
+      hook: text.hook(mainNpc, townName, hookPrompt),
+      scenes: quickStartScenes,
+      npcs: [
+        {
+          name: mainNpc,
+          role: text.npcRole(townName),
+          motivation: text.npcMotivation(townName, profile.motivation),
+          secret: text.npcSecret(profile.secret),
+        },
+        {
+          name: supportNpc,
+          role:
+            locale === "zh"
+              ? "提供阻力，也提供错误判断"
+              : "adds friction and a useful bad assumption",
+          motivation:
+            locale === "zh"
+              ? "先保住秩序，再考虑真相"
+              : "preserve order before truth",
+          secret:
+            locale === "zh"
+              ? "他隐瞒了自己错过的一条关键线索"
+              : "they are hiding the clue they missed",
+        },
+      ],
+      encounters: quickStartEncounters,
+      rewards: [
+        {
+          type: text.rewardTypes[profile.rewardType],
+          value: text.rewardValue[profile.rewardType](
+            profile.rewardType === "information" ? lead : townName,
+          ),
+        },
+      ],
+      returnToMainPlot: buildReturnPath(
+        text,
+        relation,
+        townName,
+        lead,
+        delta,
+        desiredLength,
+      ),
+      gmSummary:
+        locale === "zh"
+          ? `一个适合 ${quickStartLength} 的 Quick Start 短模组，强调同晚可跑与清晰收束。`
+          : `A Quick Start short module tuned for ${quickStartLength} and ready for same-night play.`,
+    };
+  }
 
   return {
     locale,

@@ -166,6 +166,57 @@ const zh = {
       reviewCanon: "查看 canon",
     },
   },
+  quickStart: {
+    title: "快速开始",
+    description: "无需先导入 canon，也能直接生成一个可运行的短模组。",
+    cta: "Quick Start",
+    emptyHint: "还没有资料也没关系，先用 Quick Start 准备今晚能跑的内容。",
+    seededHint: "你已经有 {count} 个城镇种子，可以更快生成草稿。",
+    formIntro:
+      "用更紧凑的表单填写地点、压力和游玩风格，然后直接进入同一个支线编辑器。",
+    fullFormCta: "完整支线表单",
+    compactHelper: "只填写今晚要跑的地点种子、当前压力和冒险前提即可。",
+    seedCardTitle: "地点种子",
+    badge: "Quick Start 草稿",
+    stats: {
+      existingTownSeeds: "现有城镇种子",
+      noSourceRequired: "无需源资料",
+    },
+    labels: {
+      locationSeed: "地点种子",
+      townVibe: "地点氛围",
+      localTension: "当前压力",
+      playStyle: "游玩风格",
+      sessionLength: "时长",
+      adventurePremise: "冒险前提",
+    },
+    placeholders: {
+      locationSeed: "雾港、空钟楼、被淹没的修道院……",
+      townVibe: "简要描述这个地点的氛围和桌面质感。",
+      localTension: "眼下正在升级的问题是什么？",
+      adventurePremise: "描述你今晚想跑的短模组类型，以及任何约束。",
+    },
+    seedStatus: {
+      placeholderName: "今晚的地点",
+      empty: "还没有填写地点种子。",
+      tensionFallback: "补上即将失控的压力、谜团或危险。",
+    },
+    spotlightTitle: "适合你今晚就需要可运行内容的时候",
+    spotlight: {
+      noCanon: {
+        title: "不需要先导入 canon",
+        description: "即使是空白战役，也能先拿到一份可游玩的短模组草稿。",
+      },
+      fastSetup: {
+        title: "更紧凑的准备",
+        description: "把注意力集中在地点、压力、节奏和前提，而不是完整城镇上下文表单。",
+      },
+      sameEditor: {
+        title: "仍然进入同一编辑器和预览",
+        description: "Quick Start 草稿仍然会进入标准支线编辑器和 GM packet 预览。",
+      },
+    },
+  },
   questRequest: {
     labels: {
       townName: "城镇名称",
@@ -546,6 +597,62 @@ const en: Messages = {
     actions: {
       campaignOverview: "Campaign overview",
       reviewCanon: "Review canon",
+    },
+  },
+  quickStart: {
+    title: "Quick Start",
+    description: "Generate a short playable module without importing canon first.",
+    cta: "Quick Start",
+    emptyHint: "No source material yet? Use Quick Start to prep tonight's adventure anyway.",
+    seededHint: "You already have {count} town seeds that can anchor a faster draft.",
+    formIntro:
+      "Use a compact form to provide the location, pressure, and play style, then open the result in the same draft editor.",
+    fullFormCta: "Full quest form",
+    compactHelper:
+      "Capture only the location seed, pressure, and premise you need for tonight's session.",
+    seedCardTitle: "Location seed",
+    badge: "Quick Start Draft",
+    stats: {
+      existingTownSeeds: "Existing town seeds",
+      noSourceRequired: "No source required",
+    },
+    labels: {
+      locationSeed: "Location seed",
+      townVibe: "Location vibe",
+      localTension: "Immediate pressure",
+      playStyle: "Play style",
+      sessionLength: "Session length",
+      adventurePremise: "Adventure premise",
+    },
+    placeholders: {
+      locationSeed: "Fog Harbor, the Hollow Bell, the drowned abbey...",
+      townVibe: "Sketch the mood and table-facing texture of this location.",
+      localTension: "What problem is escalating right now?",
+      adventurePremise:
+        "Describe the kind of short module you want to run tonight, including any constraints.",
+    },
+    seedStatus: {
+      placeholderName: "Tonight's location",
+      empty: "No location seed filled in yet.",
+      tensionFallback: "Add the pressure, mystery, or danger that is about to boil over.",
+    },
+    spotlightTitle: "Use it when you need something runnable tonight",
+    spotlight: {
+      noCanon: {
+        title: "No canon import required",
+        description:
+          "Start from a bare campaign and still get a playable short module draft.",
+      },
+      fastSetup: {
+        title: "Compact setup",
+        description:
+          "Focus on location, pressure, pacing, and premise instead of the full town-context form.",
+      },
+      sameEditor: {
+        title: "Same editor and preview",
+        description:
+          "Quick Start drafts still land in the normal quest editor and GM packet preview.",
+      },
     },
   },
   questRequest: {
