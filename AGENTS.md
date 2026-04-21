@@ -53,6 +53,19 @@ Start the dev server:
 pnpm dev
 ```
 
+Fast local bootstrap and start:
+
+```bash
+pnpm boot
+```
+
+Windows local production start and auto-start:
+
+```bash
+pnpm serve:local
+pnpm autostart:install
+```
+
 Typecheck:
 
 ```bash
@@ -244,7 +257,7 @@ For doc-only changes, at least verify the files render sensibly and cross-links 
 <!-- gitnexus:start -->
 # GitNexus 鈥?Code Intelligence
 
-This project is indexed by GitNexus as **aigenerateAdvanture** (1337 symbols, 2258 relationships, 70 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **aigenerateAdvanture** (1722 symbols, 3013 relationships, 110 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

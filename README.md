@@ -29,6 +29,54 @@ If you want to read the same workflow in English, use these mirrors:
 
 ## Local Setup
 
+Fast path:
+
+```bash
+pnpm boot
+```
+
+That single command will:
+
+- create `.env` from `.env.example` if needed
+- install dependencies if `node_modules` is missing
+- run Prisma migrations
+- generate the Prisma client
+- validate the Prisma schema
+- start the Next.js dev server
+
+Then open `http://localhost:3000`.
+
+## Local Auto-Start On Windows
+
+If you want the app to come up automatically after you log in on your local Windows machine, use the production launcher plus a Scheduled Task.
+
+One-time install:
+
+```bash
+pnpm autostart:install
+```
+
+Manual local production run:
+
+```bash
+pnpm serve:local
+```
+
+What this does:
+
+- installs dependencies if missing
+- creates `.env` from `.env.example` if needed
+- runs `prisma migrate deploy`
+- regenerates the Prisma client
+- rebuilds the app only when source files are newer than the current `.next` build
+- starts the app on `http://127.0.0.1:9779`
+
+Remove the auto-start task later:
+
+```bash
+pnpm autostart:remove
+```
+
 1. Install dependencies:
 
 ```bash

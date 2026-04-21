@@ -4,6 +4,10 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "boot": "powershell -ExecutionPolicy Bypass -File ./scripts/dev-up.ps1",
+    "serve:local": "powershell -ExecutionPolicy Bypass -File ./scripts/local-prod-start.ps1",
+    "autostart:install": "powershell -ExecutionPolicy Bypass -File ./scripts/install-autostart-task.ps1",
+    "autostart:remove": "powershell -ExecutionPolicy Bypass -File ./scripts/remove-autostart-task.ps1",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
