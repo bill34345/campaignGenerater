@@ -2,11 +2,17 @@
 
 import React from "react";
 import Link from "next/link";
-import { FormEvent, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useLanguage } from "@/components/i18n/language-provider";
 import type { ApiErrorCode } from "@/lib/i18n/messages";
 import type { TownQuestContext } from "@/lib/canon/context-builder";
-import type { QuestRequest } from "@/types/domain";
+import type {
+  QuestGenerationEvent,
+  QuestGenerationStage,
+  QuestGenerationStatus,
+  QuestRequest,
+} from "@/types/domain";
 
 type QuestRequestFormValues = Pick<
   QuestRequest,
@@ -22,6 +28,7 @@ type QuestRequestFormValues = Pick<
 
 type QuestRequestFormProps = {
   campaignId: string;
+  activeRequestId?: string;
   mode?: QuestRequest["requestMode"];
   townOptions: Array<{
     id: string;
@@ -34,6 +41,10 @@ type QuestRequestFormProps = {
 
 type QuestResponse =
   | {
+      questRequest: QuestRequest;
+      draft: null;
+    }
+  | {
       draft: {
         id: string;
       };
@@ -42,6 +53,14 @@ type QuestResponse =
       errorCode?: ApiErrorCode;
       error?: string;
     };
+
+type QuestGenerationStatusResponse = {
+  questRequest: QuestRequest;
+  draft: {
+    id: string;
+    title?: string;
+  } | null;
+};
 
 function renderFactSummary(summary: string, fallback: string) {
   return summary.trim().length > 0 ? summary : fallback;
@@ -70,12 +89,16 @@ function getQuickStartLengthOptions(locale: "zh" | "en") {
 
 export function QuestRequestForm({
   campaignId,
+  activeRequestId: initialActiveRequestId,
   mode = "standard",
   townOptions,
   selectedTownId,
   initialValues,
   workingContext,
 }: QuestRequestFormProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { locale, messages: m } = useLanguage();
   const isQuickStart = mode === "quick_start";
   const [townName, setTownName] = useState(initialValues.townName);
@@ -96,6 +119,20 @@ export function QuestRequestForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draftId, setDraftId] = useState<string | null>(null);
+  const [activeRequestId, setActiveRequestId] = useState<string | null>(
+    initialActiveRequestId ?? null,
+  );
+  const [generationStatus, setGenerationStatus] =
+    useState<QuestGenerationStatus | null>(
+      initialActiveRequestId ? "queued" : null,
+    );
+  const [generationStage, setGenerationStage] =
+    useState<QuestGenerationStage | null>(
+      initialActiveRequestId ? "queued" : null,
+    );
+  const [progressMessage, setProgressMessage] = useState<string | null>(null);
+  const [previewText, setPreviewText] = useState("");
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const deltaRows = useMemo(
     () =>
@@ -110,12 +147,201 @@ export function QuestRequestForm({
   const factionFallback =
     locale === "zh" ? "暂无阵营摘要。" : "No faction summary recorded.";
   const quickStartLengthOptions = getQuickStartLengthOptions(locale);
+  const isGenerating =
+    activeRequestId !== null &&
+    generationStatus !== "completed" &&
+    generationStatus !== "failed";
+  const generationStageLabel = generationStage
+    ? m.questRequest.generation.stages[generationStage]
+    : null;
+
+  function updateRequestSearchParam(requestId: string | null) {
+    const nextParams = new URLSearchParams(searchParams?.toString());
+
+    if (requestId) {
+      nextParams.set("requestId", requestId);
+    } else {
+      nextParams.delete("requestId");
+    }
+
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery.length > 0 ? `${pathname}?${nextQuery}` : pathname);
+  }
+
+  function resetGeneratingState() {
+    setActiveRequestId(null);
+    setGenerationStatus(null);
+    setGenerationStage(null);
+    setProgressMessage(null);
+    setPreviewText("");
+    setDraftId(null);
+    updateRequestSearchParam(null);
+  }
+
+  function applyQuestRequestStatus(questRequest: QuestRequest) {
+    setGenerationStatus(questRequest.generationStatus);
+    setGenerationStage(questRequest.generationStage);
+    setProgressMessage(questRequest.generationProgressMessage ?? null);
+    setPreviewText(questRequest.generationPreviewText ?? "");
+  }
+
+  useEffect(() => {
+    if (!activeRequestId) {
+      return;
+    }
+
+    let closed = false;
+    let eventSource: EventSource | null = null;
+
+    const stopPolling = () => {
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+    const fetchQuestGenerationStatus = async (requestId: string) => {
+      const response = await fetch(
+        `/api/campaigns/${campaignId}/quests/requests/${requestId}/status`,
+        {
+          cache: "no-store",
+        },
+      );
+
+      if (!response.ok) {
+        return null;
+      }
+
+      return (await response.json()) as QuestGenerationStatusResponse;
+    };
+    const startPolling = () => {
+      if (pollTimerRef.current) {
+        return;
+      }
+
+      pollTimerRef.current = setInterval(async () => {
+        const status = await fetchQuestGenerationStatus(activeRequestId);
+
+        if (!status || closed) {
+          return;
+        }
+
+        applyQuestRequestStatus(status.questRequest);
+
+        if (status.questRequest.generationStatus === "completed" && status.draft?.id) {
+          setDraftId(status.draft.id);
+          stopPolling();
+          router.push(`/campaigns/${campaignId}/quests/${status.draft.id}`);
+        }
+
+        if (status.questRequest.generationStatus === "failed") {
+          setError(
+            status.questRequest.generationLastErrorMessage ??
+              m.questRequest.errors.generationFailed,
+          );
+          stopPolling();
+        }
+      }, 2000);
+    };
+
+    const syncCurrentStatus = async () => {
+      const status = await fetchQuestGenerationStatus(activeRequestId);
+
+      if (!status || closed) {
+        return;
+      }
+
+      applyQuestRequestStatus(status.questRequest);
+
+      if (status.questRequest.generationStatus === "completed" && status.draft?.id) {
+        setDraftId(status.draft.id);
+        router.push(`/campaigns/${campaignId}/quests/${status.draft.id}`);
+        return;
+      }
+
+      if (status.questRequest.generationStatus === "failed") {
+        setError(
+          status.questRequest.generationLastErrorMessage ??
+            m.questRequest.errors.generationFailed,
+        );
+        return;
+      }
+
+      try {
+        eventSource = new EventSource(
+          `/api/campaigns/${campaignId}/quests/requests/${activeRequestId}/events`,
+        );
+      } catch {
+        startPolling();
+        return;
+      }
+
+      eventSource.addEventListener("status", (event) => {
+        const payload = JSON.parse((event as MessageEvent).data) as QuestGenerationStatusResponse;
+
+        applyQuestRequestStatus(payload.questRequest);
+      });
+      eventSource.addEventListener("text_delta", (event) => {
+        const payload = JSON.parse((event as MessageEvent).data) as QuestGenerationEvent;
+
+        if (payload.previewText) {
+          setPreviewText(payload.previewText);
+        }
+        if (payload.message) {
+          setProgressMessage(payload.message);
+        }
+      });
+      eventSource.addEventListener("completed", (event) => {
+        const payload = JSON.parse((event as MessageEvent).data) as QuestGenerationEvent;
+
+        if (payload.previewText) {
+          setPreviewText(payload.previewText);
+        }
+        if (payload.message) {
+          setProgressMessage(payload.message);
+        }
+        setGenerationStatus("completed");
+        setGenerationStage("completed");
+        if (payload.draftId) {
+          setDraftId(payload.draftId);
+          router.push(`/campaigns/${campaignId}/quests/${payload.draftId}`);
+        }
+      });
+      eventSource.addEventListener("failed", (event) => {
+        const payload = JSON.parse((event as MessageEvent).data) as QuestGenerationEvent;
+
+        setGenerationStatus("failed");
+        setGenerationStage("failed");
+        setProgressMessage(payload.message ?? null);
+        setError(payload.errorMessage ?? m.questRequest.errors.generationFailed);
+      });
+      eventSource.onerror = () => {
+        eventSource?.close();
+        setProgressMessage(m.questRequest.generation.reconnecting);
+        startPolling();
+      };
+    };
+
+    void syncCurrentStatus();
+
+    return () => {
+      closed = true;
+      eventSource?.close();
+      stopPolling();
+    };
+  }, [
+    activeRequestId,
+    campaignId,
+    m.questRequest.errors.generationFailed,
+    m.questRequest.generation.reconnecting,
+    router,
+  ]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
     setError(null);
     setDraftId(null);
+    setPreviewText("");
 
     try {
       const response = await fetch(`/api/campaigns/${campaignId}/quests`, {
@@ -141,7 +367,7 @@ export function QuestRequestForm({
 
       const payload = (await response.json()) as QuestResponse;
 
-      if (!response.ok || !("draft" in payload)) {
+      if (!response.ok || !("questRequest" in payload)) {
         const errorCode = "errorCode" in payload ? payload.errorCode : undefined;
         const responseError = "error" in payload ? payload.error : undefined;
         setError(
@@ -152,7 +378,9 @@ export function QuestRequestForm({
         return;
       }
 
-      setDraftId(payload.draft.id);
+      setActiveRequestId(payload.questRequest.id ?? null);
+      applyQuestRequestStatus(payload.questRequest);
+      updateRequestSearchParam(payload.questRequest.id ?? null);
     } catch {
       setError(m.questRequest.errors.generationFailed);
     } finally {
@@ -388,6 +616,37 @@ export function QuestRequestForm({
           </div>
         </div>
 
+        {activeRequestId ? (
+          <div
+            data-testid="quest-generation-status"
+            className="mt-4 rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-4 text-sm text-cyan-100"
+          >
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">
+              {m.questRequest.generation.title}
+            </p>
+            <p
+              data-testid="quest-generation-stage"
+              className="mt-2 text-base font-semibold text-white"
+            >
+              {generationStageLabel ?? m.questRequest.generation.stages.queued}
+            </p>
+            <p className="mt-2 text-sm leading-6 text-cyan-100/90">
+              {progressMessage ?? m.questRequest.loading}
+            </p>
+            {previewText ? (
+              <div
+                data-testid="quest-generation-preview"
+                className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-3 text-xs leading-6 text-slate-200 whitespace-pre-wrap"
+              >
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                  {m.questRequest.generation.previewTitle}
+                </p>
+                {previewText}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         {error ? (
           <p className="mt-4 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
             {error}
@@ -406,16 +665,27 @@ export function QuestRequestForm({
           </div>
         ) : null}
 
+        {generationStatus === "failed" ? (
+          <button
+            type="button"
+            data-testid="quest-generation-retry"
+            onClick={resetGeneratingState}
+            className="mt-4 inline-flex rounded-full border border-red-400/40 px-4 py-2 text-sm font-semibold text-red-100 transition hover:border-red-300 hover:bg-red-500/10"
+          >
+            {m.questRequest.retry}
+          </button>
+        ) : null}
+
         <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
           <p className="text-sm leading-6 text-slate-400">
             {isQuickStart ? m.quickStart.compactHelper : m.questRequest.helper}
           </p>
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || isGenerating}
             className="rounded-full bg-cyan-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-cyan-900 disabled:text-slate-300"
           >
-            {isSubmitting ? m.questRequest.loading : m.questRequest.button}
+            {isSubmitting || isGenerating ? m.questRequest.loading : m.questRequest.button}
           </button>
         </div>
       </form>

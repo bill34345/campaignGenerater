@@ -28,6 +28,8 @@ const request: QuestRequest = {
   campaignId: "camp_1",
   townProfileId: null,
   requestMode: "quick_start",
+  generationStatus: "queued",
+  generationStage: "queued",
   townName: "Fog Harbor",
   locale: "en",
   townVibe: "Wet docks and tolling bells.",

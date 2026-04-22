@@ -19,6 +19,7 @@ type NewQuestPageProps = {
   searchParams: Promise<{
     townId?: string;
     quick_start?: string;
+    requestId?: string;
   }>;
 };
 
@@ -139,7 +140,7 @@ export default async function NewQuestPage({
   const locale = await getRequestLocale();
   const m = getMessages(locale);
   const { campaignId } = await params;
-  const { townId, quick_start } = await searchParams;
+  const { townId, quick_start, requestId } = await searchParams;
   const isQuickStart = quick_start === "1";
 
   const campaign = await db.campaign.findUnique({
@@ -456,6 +457,7 @@ export default async function NewQuestPage({
         <div className="mt-8">
           <QuestRequestForm
             campaignId={campaignId}
+            activeRequestId={requestId}
             mode={isQuickStart ? "quick_start" : "standard"}
             townOptions={campaign.townProfiles.map((town) => ({
               id: town.id,

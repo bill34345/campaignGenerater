@@ -44,6 +44,30 @@ const conflictTypeSchema = z.enum([
   "exploration",
   "mixed",
 ]);
+export const questGenerationStatusSchema = z.enum([
+  "queued",
+  "running",
+  "completed",
+  "failed",
+  "cancelled",
+]);
+export const questGenerationStageSchema = z.enum([
+  "queued",
+  "building_context",
+  "calling_provider",
+  "streaming",
+  "validating",
+  "persisting",
+  "completed",
+  "failed",
+  "cancelled",
+]);
+export const questGenerationEventTypeSchema = z.enum([
+  "status",
+  "text_delta",
+  "completed",
+  "failed",
+]);
 const generationModeSchema = z.enum(["provider", "fallback", "unknown", "openai"]);
 const generationProviderSchema = llmProviderSchema;
 const fallbackReasonSchema = z.enum([
@@ -308,6 +332,15 @@ export const questRequestSchema = z
     campaignId: nonEmptyString,
     townProfileId: optionalNonEmptyString,
     requestMode: questRequestModeSchema.default("standard"),
+    generationStatus: questGenerationStatusSchema.default("queued"),
+    generationStage: questGenerationStageSchema.default("queued"),
+    generationProgressMessage: z.string().trim().min(1).nullable().optional(),
+    generationPreviewText: z.string().trim().min(1).nullable().optional(),
+    generationStartedAt: z.coerce.date().nullable().optional(),
+    generationCompletedAt: z.coerce.date().nullable().optional(),
+    generationFailedAt: z.coerce.date().nullable().optional(),
+    generationLastErrorCode: z.string().trim().min(1).nullable().optional(),
+    generationLastErrorMessage: z.string().trim().min(1).nullable().optional(),
     townName: nonEmptyString,
     locale: z.enum(["zh", "en"]).default(DEFAULT_LOCALE),
     townVibe: z.string().trim().min(1).optional().nullable(),
@@ -320,6 +353,26 @@ export const questRequestSchema = z
   .strict();
 
 export type QuestRequest = z.infer<typeof questRequestSchema>;
+
+export const questGenerationEventSchema = z
+  .object({
+    type: questGenerationEventTypeSchema,
+    questRequestId: nonEmptyString,
+    generationStatus: questGenerationStatusSchema,
+    generationStage: questGenerationStageSchema,
+    message: z.string().trim().min(1).nullable().optional(),
+    previewText: z.string().trim().min(1).nullable().optional(),
+    delta: z.string().trim().min(1).nullable().optional(),
+    draftId: z.string().trim().min(1).nullable().optional(),
+    errorCode: z.string().trim().min(1).nullable().optional(),
+    errorMessage: z.string().trim().min(1).nullable().optional(),
+    occurredAt: z.coerce.date(),
+  })
+  .strict();
+
+export type QuestGenerationEvent = z.infer<typeof questGenerationEventSchema>;
+export type QuestGenerationStatus = z.infer<typeof questGenerationStatusSchema>;
+export type QuestGenerationStage = z.infer<typeof questGenerationStageSchema>;
 
 export const questDraftSchema = z
   .object({

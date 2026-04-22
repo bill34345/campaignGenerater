@@ -62,6 +62,8 @@ describe("domain schemas", () => {
     const parsed = questRequestSchema.safeParse({
       campaignId: "cmp_1",
       townProfileId: null,
+      generationStatus: "queued",
+      generationStage: "queued",
       townName: "Fog Harbor",
       locale: "en",
       townVibe: "Wet docks, nervous bells, and shuttered inns.",
@@ -71,6 +73,29 @@ describe("domain schemas", () => {
       desiredLength: "3h",
       extraContext: "Adventure premise: find the missing dockworkers.",
       requestMode: "quick_start",
+    });
+
+    expect(parsed.success).toBe(true);
+  });
+
+  it("accepts quest requests with persisted generation lifecycle fields", () => {
+    const parsed = questRequestSchema.safeParse({
+      campaignId: "camp_1",
+      townProfileId: null,
+      requestMode: "standard",
+      generationStatus: "running",
+      generationStage: "streaming",
+      generationProgressMessage: "Drafting scenes...",
+      generationPreviewText: "The chapel bell tolls over Blackwater.",
+      generationStartedAt: "2026-04-22T10:00:00.000Z",
+      townName: "Blackwater",
+      locale: "en",
+      townVibe: "Foggy and suspicious",
+      localTension: "Smugglers are using the crypts",
+      questType: "investigation",
+      mainPlotRelation: "foreshadow",
+      desiredLength: "standard",
+      extraContext: "Tie the payoff back to the cult.",
     });
 
     expect(parsed.success).toBe(true);

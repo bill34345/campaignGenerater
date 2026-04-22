@@ -6,9 +6,13 @@ import { QuestRequestForm } from "@/components/quests/quest-request-form";
 import type { TownQuestContext } from "@/lib/canon/context-builder";
 
 vi.mock("next/navigation", () => ({
+  usePathname: () => "/campaigns/camp_1/quests/new",
   useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
     refresh: vi.fn(),
   }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 const workingContext: TownQuestContext = {
@@ -76,15 +80,90 @@ describe("QuestRequestForm quick start mode", () => {
   });
 
   it("submits quick start payloads with requestMode and no townProfileId", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ draft: { id: "quest_1" } }), {
-        status: 201,
-        headers: {
-          "content-type": "application/json",
+    class MockEventSource {
+      addEventListener() {}
+      close() {}
+    }
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input.toString();
+
+      if (url.includes("/status")) {
+        return new Response(
+          JSON.stringify({
+            questRequest: {
+              id: "req_1",
+              campaignId: "camp_1",
+              townProfileId: null,
+              requestMode: "quick_start",
+              generationStatus: "queued",
+              generationStage: "queued",
+              generationProgressMessage: "Queued for generation.",
+              generationPreviewText: null,
+              generationStartedAt: null,
+              generationCompletedAt: null,
+              generationFailedAt: null,
+              generationLastErrorCode: null,
+              generationLastErrorMessage: null,
+              townName: "Fog Harbor",
+              locale: "en",
+              townVibe: "",
+              localTension: "Dock crews vanish after dusk.",
+              questType: "investigation",
+              mainPlotRelation: null,
+              desiredLength: "3h",
+              extraContext:
+                "Find the missing dockworkers before the tide carries them under.",
+            },
+            draft: null,
+          }),
+          {
+            status: 200,
+            headers: {
+              "content-type": "application/json",
+            },
+          },
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          questRequest: {
+            id: "req_1",
+            campaignId: "camp_1",
+            townProfileId: null,
+            requestMode: "quick_start",
+            generationStatus: "queued",
+            generationStage: "queued",
+            generationProgressMessage: "Queued for generation.",
+            generationPreviewText: null,
+            generationStartedAt: null,
+            generationCompletedAt: null,
+            generationFailedAt: null,
+            generationLastErrorCode: null,
+            generationLastErrorMessage: null,
+            townName: "Fog Harbor",
+            locale: "en",
+            townVibe: "",
+            localTension: "Dock crews vanish after dusk.",
+            questType: "investigation",
+            mainPlotRelation: null,
+            desiredLength: "3h",
+            extraContext:
+              "Find the missing dockworkers before the tide carries them under.",
+          },
+          draft: null,
+        }),
+        {
+          status: 202,
+          headers: {
+            "content-type": "application/json",
+          },
         },
-      }),
-    );
+      );
+    });
     vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("EventSource", MockEventSource as unknown as typeof EventSource);
 
     renderQuickStartForm();
 
@@ -105,11 +184,11 @@ describe("QuestRequestForm quick start mode", () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
-    const [, requestInit] = fetchMock.mock.calls[0] as [
-      string,
-      { body: string; method: string },
-    ];
-    const body = JSON.parse(requestInit.body);
+    const requestInit = (
+      fetchMock.mock.calls[0] as unknown as [string, { body: string; method: string }]
+    )?.[1];
+    expect(requestInit).toBeDefined();
+    const body = JSON.parse(requestInit?.body ?? "{}");
 
     expect(body).toMatchObject({
       townProfileId: null,
@@ -121,6 +200,6 @@ describe("QuestRequestForm quick start mode", () => {
       mainPlotRelation: null,
     });
 
-    expect(await screen.findByRole("link", { name: /open generated quest/i })).toBeVisible();
+    expect(await screen.findByTestId("quest-generation-status")).toBeVisible();
   });
 });

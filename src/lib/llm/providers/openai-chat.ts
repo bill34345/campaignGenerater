@@ -835,7 +835,12 @@ export const openAIChatAdapter: LlmProviderAdapter = {
   provider: "openai_chat",
   defaultQuestModel: DEFAULT_MODEL,
   defaultFactModel: DEFAULT_MODEL,
-  async generateQuestDraft({ config, workingContext, questRequest }) {
+  async generateQuestDraft({
+    config,
+    workingContext,
+    questRequest,
+    onStageChange,
+  }) {
     if (shouldUseMockLlmProvider()) {
       throwMockProviderFailure(config);
       return buildMockQuestDraft({
@@ -851,6 +856,7 @@ export const openAIChatAdapter: LlmProviderAdapter = {
     });
     const model = config.llmModel ?? DEFAULT_MODEL;
     const prompt = buildQuestPrompt(workingContext, questRequest);
+    await onStageChange?.("calling_provider", "Calling OpenAI Chat...");
     const response = await client.chat.completions.create({
       model,
       messages: [
@@ -866,6 +872,7 @@ export const openAIChatAdapter: LlmProviderAdapter = {
         },
       },
     });
+    await onStageChange?.("streaming", "Received provider response.");
 
     return normalizeQuestDraftContent(
       response.choices[0]?.message?.content,

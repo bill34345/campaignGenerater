@@ -45,6 +45,7 @@ export function createOpenAIClient(options: OpenAIClientOptions = {}) {
 export type OpenAIResponsesClient = {
   responses: {
     parse: InstanceType<typeof OpenAI>["responses"]["parse"];
+    stream?: InstanceType<typeof OpenAI>["responses"]["stream"];
   };
 };
 

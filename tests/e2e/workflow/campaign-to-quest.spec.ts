@@ -52,15 +52,8 @@ test("@critical quick start flow creates a draft from an empty campaign", async 
 
   const quickStartForm = page.getByTestId("quick-start-form");
   await quickStartForm.locator('button[type="submit"]').click();
-
-  const draftLink = quickStartForm.locator(
-    'a[href*="/quests/"]:not([href*="/quests/new"])',
-  );
-  await expect(draftLink).toBeVisible();
-  await Promise.all([
-    page.waitForURL(/\/campaigns\/[^/]+\/quests\/(?!new(?:[/?#]|$))[^/?#]+$/),
-    draftLink.click(),
-  ]);
+  await expect(page.getByTestId("quest-generation-status")).toBeVisible();
+  await page.waitForURL(/\/campaigns\/[^/]+\/quests\/(?!new(?:[/?#]|$))[^/?#]+$/);
 
   await expect(page.getByTestId("quick-start-draft-badge")).toBeVisible();
   await expect(page.locator("#quest-title")).toBeVisible();

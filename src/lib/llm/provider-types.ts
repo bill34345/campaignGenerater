@@ -1,7 +1,12 @@
 import type { FactExtractionChunk, ExtractedCampaignFact } from "@/lib/llm/extract-facts";
 import type { TownQuestContext } from "@/lib/canon/context-builder";
 import type { QuestGenerationDraft } from "@/lib/quests/quest-schema";
-import type { CampaignLlmSettings, LlmProvider, QuestRequest } from "@/types/domain";
+import type {
+  CampaignLlmSettings,
+  LlmProvider,
+  QuestGenerationStage,
+  QuestRequest,
+} from "@/types/domain";
 
 export type ResolvedLlmConfig = CampaignLlmSettings & {
   llmProvider: LlmProvider;
@@ -15,6 +20,15 @@ export type TestLlmConnectionResult = {
   model: string;
 };
 
+export type QuestGenerationStageChangeCallback = (
+  stage: QuestGenerationStage,
+  message?: string | null,
+) => void | Promise<void>;
+
+export type QuestGenerationTextDeltaCallback = (
+  text: string,
+) => void | Promise<void>;
+
 export type LlmProviderAdapter = {
   provider: LlmProvider;
   defaultQuestModel: string;
@@ -23,6 +37,8 @@ export type LlmProviderAdapter = {
     config: ResolvedLlmConfig;
     workingContext: TownQuestContext;
     questRequest: QuestRequest;
+    onStageChange?: QuestGenerationStageChangeCallback;
+    onTextDelta?: QuestGenerationTextDeltaCallback;
   }): Promise<QuestGenerationDraft>;
   extractFactsFromChunks(input: {
     config: ResolvedLlmConfig;

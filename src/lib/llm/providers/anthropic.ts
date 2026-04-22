@@ -149,6 +149,230 @@ function parseRawJson(content: string) {
   return JSON.parse(normalizeJsonCandidate(content)) as unknown;
 }
 
+type QuestPromptCopy = {
+  intro: string;
+  onlyJson: string;
+  anchor: string;
+  campaignTone: string;
+  partyLevel: string;
+  town: string;
+  townVibe: string;
+  localTension: string;
+  questType: string;
+  mainPlotRelation: string;
+  desiredLength: string;
+  extraContext: string;
+  openHooks: string;
+  relevantNpcs: string;
+  relevantFactions: string;
+  recentDeltas: string;
+  noneRecorded: string;
+  unspecified: string;
+  none: string;
+  system: string;
+  quickStartIntro: string;
+  quickStartSelfContained: string;
+  quickStartRequirements: string;
+  quickStartPacing: string;
+};
+
+function getQuestPromptCopy(locale: QuestRequest["locale"]): QuestPromptCopy {
+  if (locale === "zh") {
+    return {
+      intro: "为一场正在进行中的 5e 战役生成一份可直接游玩的城镇支线模组草稿。",
+      onlyJson: "只返回单个 JSON 对象，不要输出 JSON 之外的文字。",
+      anchor: "确保支线锚定在指定城镇，并留出清晰的回归主线入口。",
+      campaignTone: "战役氛围",
+      partyLevel: "队伍等级",
+      town: "城镇",
+      townVibe: "城镇气质",
+      localTension: "本地张力",
+      questType: "支线类型",
+      mainPlotRelation: "与主线关系",
+      desiredLength: "期望时长",
+      extraContext: "额外上下文",
+      openHooks: "开放钩子",
+      relevantNpcs: "相关 NPC",
+      relevantFactions: "相关阵营",
+      recentDeltas: "最近战役变化",
+      noneRecorded: "暂无记录",
+      unspecified: "未说明",
+      none: "无",
+      system:
+        "你要为跑团战役生成结构化支线模组草稿，并且必须严格使用请求的语言输出。",
+      quickStartIntro: "你正在生成一个 GM 今晚就能开跑的短模组。",
+      quickStartSelfContained:
+        "不要依赖已导入的 canon，把这次输出写成可独立运行的内容。",
+      quickStartRequirements:
+        "结果必须包含：强钩子、3 到 5 个场景、至少 2 个关键 NPC、至少 1 个遭遇、奖励和清晰结尾。",
+      quickStartPacing:
+        "按用户要求的时长控制节奏，优先保证同晚可跑、信息密度清晰。",
+    };
+  }
+
+  return {
+    intro: "Generate a playable town side-quest draft for an ongoing 5e campaign.",
+    onlyJson: "Return a single JSON object only. Do not output text outside the JSON.",
+    anchor: "Anchor the quest in the requested town and leave a concrete return path to the main plot.",
+    campaignTone: "Campaign tone",
+    partyLevel: "Party level",
+    town: "Town",
+    townVibe: "Town vibe",
+    localTension: "Local tension",
+    questType: "Quest type",
+    mainPlotRelation: "Main plot relation",
+    desiredLength: "Desired length",
+    extraContext: "Extra context",
+    openHooks: "Open hooks",
+    relevantNpcs: "Relevant NPCs",
+    relevantFactions: "Relevant factions",
+    recentDeltas: "Recent campaign deltas",
+    noneRecorded: "None recorded",
+    unspecified: "unspecified",
+    none: "none",
+    system:
+      "You generate structured side-quest drafts for tabletop campaigns, and you must strictly output in the requested language.",
+    quickStartIntro:
+      "You are generating a self-contained short module a GM can run tonight.",
+    quickStartSelfContained:
+      "Do not rely on imported canon. Make the output self-contained.",
+    quickStartRequirements:
+      "The result must include: a strong hook, 3 to 5 scenes, at least 2 key NPCs, at least 1 encounter, rewards, and a clear ending.",
+    quickStartPacing:
+      "Use the requested session length to control pacing and optimize for same-night playability.",
+  };
+}
+
+function normalizeNarrativeLine(line: string) {
+  return line
+    .replace(/^#{1,6}\s*/, "")
+    .replace(/^\d+[.)]\s*/, "")
+    .replace(/^[-*+]\s*/, "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/`([^`]*)`/g, "$1")
+    .trim();
+}
+
+function extractNarrativeParagraphs(content: string) {
+  const normalized = content
+    .replace(/```(?:json)?/gi, "")
+    .replace(/<think\b[^>]*>[\s\S]*?<\/think>/gi, "")
+    .trim();
+
+  return normalized
+    .split(/\n\s*\n/g)
+    .map((block) =>
+      block
+        .split("\n")
+        .map((line) => normalizeNarrativeLine(line))
+        .filter(Boolean)
+        .join(" "),
+    )
+    .filter(Boolean);
+}
+
+function buildQuestDraftFromNarrativeText(
+  content: string,
+  workingContext: TownQuestContext,
+  questRequest: QuestRequest,
+) {
+  const locale = questRequest.locale ?? "zh";
+  const isChinese = locale === "zh";
+  const townName = questRequest.townName || workingContext.town.name;
+  const lines = content
+    .split("\n")
+    .map((line) => normalizeNarrativeLine(line))
+    .filter(Boolean);
+  const paragraphs = extractNarrativeParagraphs(content);
+  const defaultConflict = normalizeQuestConflictType(questRequest.questType);
+  const fallbackTitle = isChinese
+    ? `${townName}的即开支线`
+    : `${townName} quick-start side quest`;
+  const title = lines[0] ?? fallbackTitle;
+  const premise =
+    paragraphs.find((paragraph) => paragraph !== title) ??
+    (isChinese
+      ? `这是一条围绕${townName}当前压力展开的短支线。`
+      : `This is a short side quest built around the current pressure in ${townName}.`);
+  const hook =
+    lines.find((line) => line !== title && line !== premise) ??
+    (isChinese
+      ? `来自${townName}的最新异变把队伍卷了进去。`
+      : `The latest disturbance in ${townName} pulls the party in.`);
+  const sceneSeeds = paragraphs
+    .filter((paragraph) => paragraph !== title && paragraph !== premise)
+    .slice(0, 5);
+  const scenes = sceneSeeds.map((seed, index) => ({
+    name: isChinese ? `场景 ${index + 1}` : `Scene ${index + 1}`,
+    goal: seed.split(/[。！？.!?]/)[0]?.trim() || seed,
+    summary: seed,
+    location: townName,
+    conflictType: defaultConflict,
+    outcomeOptions: [
+      isChinese ? "获得新的线索或主动权" : "Gain a new lead or the initiative",
+    ],
+  }));
+
+  while (scenes.length < 3) {
+    scenes.push({
+      name: isChinese ? `补充场景 ${scenes.length + 1}` : `Added scene ${scenes.length + 1}`,
+      goal: isChinese ? "继续把支线推向高潮" : "Keep the side quest moving toward its climax",
+      summary: isChinese
+        ? `围绕${townName}当前危机继续推进，并抛出下一条清晰线索。`
+        : `Advance the current crisis in ${townName} and reveal the next clear lead.`,
+      location: townName,
+      conflictType: defaultConflict,
+      outcomeOptions: [
+        isChinese ? "拿到新线索或关键优势" : "Gain a new lead or key advantage",
+      ],
+    });
+  }
+
+  const defaultNpcs = [
+    {
+      name: workingContext.relevantNpcs[0]?.subject ?? (isChinese ? `${townName}联络人` : `${townName} contact`),
+      role: isChinese ? "城镇联络人" : "Town contact",
+      motivation: isChinese ? "稳定城镇局势" : "Stabilize the town situation",
+      secret: isChinese ? "他知道一些没说出口的内情。" : "They know more than they are saying.",
+    },
+    {
+      name: workingContext.relevantNpcs[1]?.subject ?? (isChinese ? `${townName}麻烦制造者` : `${townName} instigator`),
+      role: isChinese ? "麻烦制造者" : "Instigator",
+      motivation: isChinese ? "把局势推向更危险的方向" : "Push the situation in a more dangerous direction",
+      secret: isChinese ? "真正目的仍被隐藏着。" : "Their true objective remains hidden.",
+    },
+  ];
+  const returnToMainPlot = paragraphs.at(-1) ?? (isChinese
+    ? "支线结尾会留下可回接主线的明确线索。"
+    : "The ending leaves a clear route back to the main plot.");
+  const gmSummary = paragraphs.slice(0, 2).join(" ").trim() || premise;
+
+  return questGenerationSchema.parse({
+    locale,
+    title,
+    premise,
+    hook,
+    scenes: scenes.slice(0, 5),
+    npcs: defaultNpcs,
+    encounters: [
+      {
+        name: isChinese ? "关键遭遇" : "Key encounter",
+        difficultyTarget: "medium",
+        purpose: isChinese ? "把支线推向高潮" : "Push the side quest toward its climax",
+        notes: gmSummary,
+      },
+    ],
+    rewards: [
+      {
+        type: isChinese ? "情报" : "information",
+        value: returnToMainPlot,
+      },
+    ],
+    returnToMainPlot,
+    gmSummary,
+  });
+}
+
 function normalizeFactCategory(
   value: unknown,
   fallbackCategory?: GroupedFactCategory,
@@ -340,7 +564,13 @@ function normalizeQuestDraftContent(
   workingContext: TownQuestContext,
   questRequest: QuestRequest,
 ) {
-  const parsed = parseRawJson(content);
+  let parsed: unknown;
+
+  try {
+    parsed = parseRawJson(content);
+  } catch {
+    return buildQuestDraftFromNarrativeText(content, workingContext, questRequest);
+  }
 
   try {
     return questGenerationSchema.parse(parsed);
@@ -684,6 +914,8 @@ function toFactRecord(
 }
 
 function buildQuestPrompt(workingContext: TownQuestContext, questRequest: QuestRequest) {
+  return buildQuestPromptForQuestGeneration(workingContext, questRequest);
+
   const locale = questRequest.locale ?? "zh";
   const isChinese = locale === "zh";
   const useQuickStart = questRequest.requestMode === "quick_start";
@@ -807,11 +1039,88 @@ function buildQuestPrompt(workingContext: TownQuestContext, questRequest: QuestR
   };
 }
 
+function buildQuestPromptForQuestGeneration(
+  workingContext: TownQuestContext,
+  questRequest: QuestRequest,
+) {
+  const locale = questRequest.locale ?? "zh";
+  const useQuickStart = questRequest.requestMode === "quick_start";
+  const labels = getQuestPromptCopy(locale);
+  const npcLines = workingContext.relevantNpcs
+    .slice(0, 5)
+    .map((fact) => `- ${fact.subject}: ${fact.value}`);
+  const factionLines = workingContext.relevantFactions
+    .slice(0, 5)
+    .map((fact) => `- ${fact.subject}: ${fact.value}`);
+  const deltaLines = workingContext.recentDeltas
+    .slice(0, 5)
+    .map((delta) => `- ${delta.summary}`);
+  const hookLines = workingContext.openHooks.slice(0, 5).map((hook) => `- ${hook}`);
+
+  if (useQuickStart) {
+    return {
+      system: labels.system,
+      user: [
+        labels.quickStartIntro,
+        labels.quickStartSelfContained,
+        labels.quickStartRequirements,
+        labels.quickStartPacing,
+        "",
+        `${labels.campaignTone}: ${workingContext.campaignTone}`,
+        `${labels.partyLevel}: ${workingContext.partyLevel}`,
+        `${labels.town}: ${questRequest.townName || workingContext.town.name}`,
+        `${labels.townVibe}: ${questRequest.townVibe ?? workingContext.town.vibe ?? labels.unspecified}`,
+        `${labels.localTension}: ${questRequest.localTension ?? workingContext.town.tension ?? labels.unspecified}`,
+        `${labels.questType}: ${questRequest.questType ?? "mixed"}`,
+        `${labels.desiredLength}: ${questRequest.desiredLength ?? "3h"}`,
+        `${labels.extraContext}: ${questRequest.extraContext ?? labels.none}`,
+      ].join("\n"),
+    };
+  }
+
+  return {
+    system: labels.system,
+    user: [
+      labels.intro,
+      labels.onlyJson,
+      labels.anchor,
+      "",
+      `${labels.campaignTone}: ${workingContext.campaignTone}`,
+      `${labels.partyLevel}: ${workingContext.partyLevel}`,
+      `${labels.town}: ${workingContext.town.name}`,
+      `${labels.townVibe}: ${questRequest.townVibe ?? workingContext.town.vibe ?? labels.unspecified}`,
+      `${labels.localTension}: ${questRequest.localTension ?? workingContext.town.tension ?? labels.unspecified}`,
+      `${labels.questType}: ${questRequest.questType ?? "mixed"}`,
+      `${labels.mainPlotRelation}: ${questRequest.mainPlotRelation ?? labels.unspecified}`,
+      `${labels.desiredLength}: ${questRequest.desiredLength ?? "standard"}`,
+      `${labels.extraContext}: ${questRequest.extraContext ?? labels.none}`,
+      "",
+      `${labels.openHooks}:`,
+      ...(hookLines.length > 0 ? hookLines : [`- ${labels.noneRecorded}`]),
+      "",
+      `${labels.relevantNpcs}:`,
+      ...(npcLines.length > 0 ? npcLines : [`- ${labels.noneRecorded}`]),
+      "",
+      `${labels.relevantFactions}:`,
+      ...(factionLines.length > 0 ? factionLines : [`- ${labels.noneRecorded}`]),
+      "",
+      `${labels.recentDeltas}:`,
+      ...(deltaLines.length > 0 ? deltaLines : [`- ${labels.noneRecorded}`]),
+    ].join("\n"),
+  };
+}
+
 export const anthropicAdapter: LlmProviderAdapter = {
   provider: "anthropic",
   defaultQuestModel: DEFAULT_MODEL,
   defaultFactModel: DEFAULT_MODEL,
-  async generateQuestDraft({ config, workingContext, questRequest }) {
+  async generateQuestDraft({
+    config,
+    workingContext,
+    questRequest,
+    onStageChange,
+    onTextDelta,
+  }) {
     if (shouldUseMockLlmProvider()) {
       throwMockProviderFailure(config);
       return buildMockQuestDraft({
@@ -831,12 +1140,51 @@ export const anthropicAdapter: LlmProviderAdapter = {
     const client = createAnthropicClient(config.llmApiKey, config.llmBaseUrl);
     const model = config.llmModel ?? DEFAULT_MODEL;
     const prompt = buildQuestPrompt(workingContext, questRequest);
+
+    await onStageChange?.("calling_provider", "Calling Anthropic...");
+
+    if (onTextDelta && typeof client.messages.stream === "function") {
+      const stream = client.messages.stream({
+        model,
+        max_tokens: 4096,
+        system: prompt.system,
+        messages: [{ role: "user", content: prompt.user }],
+      });
+      let announcedStreaming = false;
+
+      stream.on("text", async (delta) => {
+        if (!announcedStreaming) {
+          announcedStreaming = true;
+          try {
+            await onStageChange?.("streaming", "Streaming draft text...");
+          } catch {
+            // Progress callbacks must never break quest generation.
+          }
+        }
+
+        if (delta.trim().length === 0) {
+          return;
+        }
+
+        try {
+          await onTextDelta(delta);
+        } catch {
+          // Progress callbacks must never break quest generation.
+        }
+      });
+
+      const content = await stream.finalText();
+
+      return normalizeQuestDraftContent(content, workingContext, questRequest);
+    }
+
     const response = await client.messages.create({
       model,
       max_tokens: 4096,
       system: prompt.system,
       messages: [{ role: "user", content: prompt.user }],
     });
+    await onStageChange?.("streaming", "Received provider response.");
 
     return normalizeQuestDraftContent(
       extractTextContent(response.content),

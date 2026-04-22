@@ -69,6 +69,8 @@ function createQuestRequest(overrides: Partial<QuestRequest> = {}): QuestRequest
     campaignId: "camp_1",
     townProfileId: "town_1",
     requestMode: "standard",
+    generationStatus: "queued",
+    generationStage: "queued",
     townName: "Blackwater",
     locale: "zh",
     townVibe: "Foggy and suspicious",

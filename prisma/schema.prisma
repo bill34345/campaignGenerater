@@ -207,6 +207,15 @@ model QuestRequest {
   campaignId        String
   townProfileId     String?
   requestMode       String       @default("standard")
+  generationStatus  String       @default("queued")
+  generationStage   String       @default("queued")
+  generationProgressMessage String?
+  generationPreviewText String?
+  generationStartedAt DateTime?
+  generationCompletedAt DateTime?
+  generationFailedAt DateTime?
+  generationLastErrorCode String?
+  generationLastErrorMessage String?
   townName          String
   locale            String       @default("zh")
   townVibe          String?
@@ -223,6 +232,7 @@ model QuestRequest {
 
   @@index([campaignId, createdAt])
   @@index([townProfileId])
+  @@index([campaignId, generationStatus, createdAt])
 }
 
 model QuestDraft {

@@ -23,7 +23,12 @@ export const openAIResponsesAdapter: LlmProviderAdapter = {
   provider: "openai_responses",
   defaultQuestModel: DEFAULT_MODEL,
   defaultFactModel: DEFAULT_MODEL,
-  async generateQuestDraft({ config, workingContext, questRequest }) {
+  async generateQuestDraft({
+    config,
+    workingContext,
+    questRequest,
+    onStageChange,
+  }) {
     if (shouldUseMockLlmProvider()) {
       throwMockProviderFailure(config);
       return buildMockQuestDraft({
@@ -32,6 +37,8 @@ export const openAIResponsesAdapter: LlmProviderAdapter = {
         questRequest,
       });
     }
+
+    await onStageChange?.("calling_provider", "Calling OpenAI Responses...");
 
     return generateQuestDraft({
       workingContext,

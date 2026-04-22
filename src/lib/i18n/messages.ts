@@ -32,6 +32,7 @@ const zh = {
   apiErrors: {
     invalidRequestBody: "请求体无效。",
     campaignNotFound: "未找到 campaign。",
+    questRequestNotFound: "未找到 quest 请求。",
     questDraftNotFound: "未找到 quest 草稿。",
     invalidMultipartUpload: "上传格式无效。",
     missingFileUpload: "缺少文件上传。",
@@ -254,6 +255,23 @@ const zh = {
     button: "生成支线",
     draftReady: "支线草稿已就绪",
     openDraft: "打开生成的支线",
+    retry: "重新生成",
+    generation: {
+      title: "生成状态",
+      previewTitle: "实时预览",
+      reconnecting: "流式连接已断开，正在改用轮询恢复状态。",
+      stages: {
+        queued: "已排队",
+        building_context: "正在整理城镇上下文",
+        calling_provider: "正在联系模型提供方",
+        streaming: "正在起草内容",
+        validating: "正在校验结构",
+        persisting: "正在保存草稿",
+        completed: "已完成",
+        failed: "已失败",
+        cancelled: "已取消",
+      },
+    },
     errors: {
       noFile: "请选择一份文本笔记或文档上传。",
       generationFailed: "支线生成失败。",
@@ -465,6 +483,7 @@ const en: Messages = {
   apiErrors: {
     invalidRequestBody: "Invalid request body.",
     campaignNotFound: "Campaign not found.",
+    questRequestNotFound: "Quest request not found.",
     questDraftNotFound: "Quest draft not found.",
     invalidMultipartUpload: "Invalid upload format.",
     missingFileUpload: "Missing file upload.",
@@ -693,6 +712,23 @@ const en: Messages = {
     button: "Generate quest",
     draftReady: "Quest draft ready",
     openDraft: "Open generated quest",
+    retry: "Try again",
+    generation: {
+      title: "Generation status",
+      previewTitle: "Live preview",
+      reconnecting: "Streaming disconnected. Falling back to status polling.",
+      stages: {
+        queued: "Queued",
+        building_context: "Building town context",
+        calling_provider: "Calling provider",
+        streaming: "Drafting content",
+        validating: "Validating structure",
+        persisting: "Saving draft",
+        completed: "Completed",
+        failed: "Failed",
+        cancelled: "Cancelled",
+      },
+    },
     errors: {
       noFile: "Choose a text note or document to upload.",
       generationFailed: "Quest generation failed.",

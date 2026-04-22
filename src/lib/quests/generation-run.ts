@@ -1,6 +1,10 @@
 import { buildFallbackQuestDraft } from "@/lib/quests/fallback-draft";
 import type { QuestGenerationDraft } from "@/lib/quests/quest-schema";
 import { getLlmErrorCode, mapRecoverableLlmError } from "@/lib/llm/provider-errors";
+import type {
+  QuestGenerationStageChangeCallback,
+  QuestGenerationTextDeltaCallback,
+} from "@/lib/llm/provider-types";
 import { resolveLlmProvider } from "@/lib/llm/provider-resolver";
 import type { QuestRequest } from "@/types/domain";
 import type { TownQuestContext } from "@/lib/canon/context-builder";
@@ -26,12 +30,32 @@ export type RunQuestGenerationInput = {
   llmSettings: CampaignLlmSettings;
   workingContext: TownQuestContext;
   questRequest: QuestRequest;
+  onStageChange?: QuestGenerationStageChangeCallback;
+  onTextDelta?: QuestGenerationTextDeltaCallback;
 };
+
+async function emitStageChange(
+  callback: QuestGenerationStageChangeCallback | undefined,
+  stage: "calling_provider" | "streaming" | "failed",
+  message?: string,
+) {
+  if (!callback) {
+    return;
+  }
+
+  try {
+    await callback(stage, message);
+  } catch {
+    // Progress callbacks must never change generation behavior.
+  }
+}
 
 export async function runQuestGeneration({
   llmSettings,
   workingContext,
   questRequest,
+  onStageChange,
+  onTextDelta,
 }: RunQuestGenerationInput): Promise<{
   draft: QuestGenerationDraft;
   meta: QuestGenerationMeta;
@@ -59,6 +83,8 @@ export async function runQuestGeneration({
       config,
       workingContext,
       questRequest,
+      onStageChange,
+      onTextDelta,
     });
 
     return {
@@ -75,6 +101,7 @@ export async function runQuestGeneration({
     const fallbackReason = mapRecoverableLlmError(error);
 
     if (!fallbackReason) {
+      await emitStageChange(onStageChange, "failed", "Quest generation failed.");
       throw error;
     }
 

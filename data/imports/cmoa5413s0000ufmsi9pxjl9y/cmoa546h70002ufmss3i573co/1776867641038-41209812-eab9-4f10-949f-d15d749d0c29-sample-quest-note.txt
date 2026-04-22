@@ -1,0 +1,7 @@
+Town: Duskport
+
+Location: The old bell tower in Duskport is sealed at dusk.
+
+NPC: Keeper Mara watches the bell tower and distrusts strangers in Duskport.
+
+Hook: Smugglers use the sealed tower cellar to move relics beneath Duskport.

@@ -4,11 +4,9 @@ const mocks = vi.hoisted(() => ({
   campaignFindUnique: vi.fn(),
   townProfileFindFirst: vi.fn(),
   questRequestCreate: vi.fn(),
-  canonicalEntryFindMany: vi.fn(),
-  canonFactFindMany: vi.fn(),
-  campaignDeltaFindMany: vi.fn(),
-  questDraftCreate: vi.fn(),
-  responsesParse: vi.fn(),
+  loadQuestGenerationStatus: vi.fn(),
+  scheduleQuestGenerationDispatch: vi.fn(),
+  subscribeToQuestGenerationEvents: vi.fn(),
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -22,36 +20,20 @@ vi.mock("@/lib/db", () => ({
     questRequest: {
       create: mocks.questRequestCreate,
     },
-    canonicalEntry: {
-      findMany: mocks.canonicalEntryFindMany,
-    },
-    canonFact: {
-      findMany: mocks.canonFactFindMany,
-    },
-    campaignDelta: {
-      findMany: mocks.campaignDeltaFindMany,
-    },
-    questDraft: {
-      create: mocks.questDraftCreate,
-    },
   },
 }));
 
-vi.mock("@/lib/openai/client", () => ({
-  createOpenAIResponsesClient: vi.fn(() => ({
-    responses: {
-      parse: mocks.responsesParse,
-    },
-  })),
+vi.mock("@/lib/quests/generation-dispatch", () => ({
+  scheduleQuestGenerationDispatch: mocks.scheduleQuestGenerationDispatch,
 }));
 
-vi.mock("@/lib/env", () => ({
-  env: {
-    nodeEnv: "test",
-    openAiApiKey: "test-openai-key",
-  },
+vi.mock("@/lib/quests/generation-status", () => ({
+  loadQuestGenerationStatus: mocks.loadQuestGenerationStatus,
+  subscribeToQuestGenerationEvents: mocks.subscribeToQuestGenerationEvents,
 }));
 
+import { GET as GET_EVENTS } from "@/app/api/campaigns/[campaignId]/quests/requests/[requestId]/events/route";
+import { GET as GET_STATUS } from "@/app/api/campaigns/[campaignId]/quests/requests/[requestId]/status/route";
 import { POST } from "@/app/api/campaigns/[campaignId]/quests/route";
 
 function createRequestBody() {
@@ -64,142 +46,53 @@ function createRequestBody() {
     mainPlotRelation: "foreshadow",
     desiredLength: "standard",
     extraContext: "Tie the payoff back to the cult.",
+    locale: "en",
     requestMode: "standard",
   };
 }
 
-function createGeneratedDraft() {
+function createQueuedQuestRequest() {
   return {
-    locale: "zh" as const,
-    title: "The Bell Below Blackwater",
-    premise: "Blackwater's chapel crypt hums with stolen tide-magic.",
-    hook: "A frantic sexton begs the party to investigate Blackwater before dusk.",
-    scenes: [
-      {
-        name: "Market Rumors",
-        goal: "Learn who disturbed the crypt",
-        summary: "The party questions fishers and temple regulars in Blackwater.",
-        location: "Blackwater market square",
-        conflictType: "investigation",
-        outcomeOptions: ["Identify the smuggler route", "Gain the sexton's trust"],
-      },
-      {
-        name: "Harbor Intercept",
-        goal: "Catch the relic runners",
-        summary: "Suspicious dockhands try to flee with the stolen reliquary.",
-        location: "Blackwater tide docks",
-        conflictType: "combat",
-        outcomeOptions: ["Capture a runner", "Recover the reliquary map"],
-      },
-      {
-        name: "Crypt Reckoning",
-        goal: "Seal the breach and recover the clue",
-        summary: "The party descends into the flooded crypt beneath Blackwater chapel.",
-        location: "Blackwater chapel crypt",
-        conflictType: "investigation",
-        outcomeOptions: ["Seal the breach", "Recover the cult ledger"],
-      },
-    ],
-    npcs: [
-      {
-        name: "Sister Hale",
-        role: "Sexton",
-        motivation: "Protect Blackwater",
-        secret: "She hid an earlier omen from the council",
-      },
-    ],
-    encounters: [
-      {
-        name: "Dockside chase",
-        difficultyTarget: "medium",
-        purpose: "Pressure the party before the crypt reveal",
-        notes: "Use slippery piers and panicked civilians.",
-      },
-    ],
-    rewards: [
-      {
-        type: "information",
-        value: "A ledger tying the smugglers to the cult patron.",
-      },
-    ],
-    returnToMainPlot: "The ledger identifies the cult patron behind the broader campaign threat.",
-    gmSummary: "An investigation-heavy Blackwater quest that exposes a smuggling cell tied to the main cult.",
+    id: "req_1",
+    campaignId: "camp_1",
+    townProfileId: "town_1",
+    requestMode: "standard",
+    generationStatus: "queued",
+    generationStage: "queued",
+    generationProgressMessage: "Queued for generation.",
+    generationPreviewText: null,
+    generationStartedAt: null,
+    generationCompletedAt: null,
+    generationFailedAt: null,
+    generationLastErrorCode: null,
+    generationLastErrorMessage: null,
+    townName: "Blackwater",
+    locale: "en",
+    townVibe: "Foggy and suspicious",
+    localTension: "Smugglers are using the crypts",
+    questType: "investigation",
+    mainPlotRelation: "foreshadow",
+    desiredLength: "standard",
+    extraContext: "Tie the payoff back to the cult.",
   };
 }
 
-describe("quest generation route", () => {
+describe("quest generation routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
     mocks.campaignFindUnique.mockResolvedValue({
       id: "camp_1",
-      tone: "Bleak maritime intrigue",
-      partyLevel: 4,
-      llmProvider: "openai_responses",
-      llmApiKey: "campaign-openai-key",
-      llmModel: null,
-      llmBaseUrl: null,
     });
     mocks.townProfileFindFirst.mockResolvedValue({
       id: "town_1",
       name: "Blackwater",
-      vibe: "Foggy and suspicious",
-      tension: "Smugglers are using the crypts",
-      notes: "The chapel bell has been wrong all week.",
-      questHooks: ["The bell sounds before dawn", "Fishers saw lights below the chapel"],
     });
-    mocks.questRequestCreate.mockResolvedValue({
-      id: "req_1",
-      campaignId: "camp_1",
-      locale: "zh",
-      ...createRequestBody(),
-    });
-    mocks.canonicalEntryFindMany.mockResolvedValue([]);
-    mocks.canonFactFindMany.mockResolvedValue([
-      {
-        id: "fact_1",
-        campaignId: "camp_1",
-        sourceDocumentId: null,
-        documentChunkId: null,
-        subject: "Sister Hale",
-        factType: "npc-role",
-        value: "Sexton in Blackwater",
-        status: "active",
-        priority: 4,
-        confidence: 0.8,
-        evidence: "Sister Hale tends the Blackwater chapel.",
-      },
-    ]);
-    mocks.campaignDeltaFindMany.mockResolvedValue([
-      {
-        id: "delta_1",
-        campaignId: "camp_1",
-        deltaType: "session-change",
-        summary: "Blackwater sealed the crypt stairs after strange tides.",
-        createdAt: new Date("2026-04-10T12:00:00.000Z"),
-        sourceFactId: null,
-        sourceFact: null,
-      },
-    ]);
+    mocks.questRequestCreate.mockResolvedValue(createQueuedQuestRequest());
+    mocks.subscribeToQuestGenerationEvents.mockImplementation(() => () => {});
   });
 
-  it("uses structured generation and persists a valid draft", async () => {
-    const generatedDraft = createGeneratedDraft();
-    mocks.responsesParse.mockResolvedValue({
-      output_parsed: generatedDraft,
-    });
-    mocks.questDraftCreate.mockResolvedValue({
-      id: "draft_1",
-      campaignId: "camp_1",
-      questRequestId: "req_1",
-      generationMode: "provider",
-      generationProvider: "openai_responses",
-      generationModel: "gpt-5.4-mini",
-      fallbackReason: null,
-      generationErrorCode: null,
-      ...generatedDraft,
-    });
-
+  it("accepts quest submission, stores queued lifecycle state, and schedules dispatch", async () => {
     const response = await POST(
       new Request("http://localhost/api/campaigns/camp_1/quests", {
         method: "POST",
@@ -213,324 +106,41 @@ describe("quest generation route", () => {
       },
     );
 
-    expect(response.status).toBe(201);
-    expect(mocks.responsesParse).toHaveBeenCalledWith(
+    expect(response.status).toBe(202);
+    expect(mocks.questRequestCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        text: expect.objectContaining({
-          format: expect.objectContaining({
-            type: "json_schema",
-            name: "quest_draft",
-            strict: true,
-            schema: expect.objectContaining({
-              type: "object",
-              properties: expect.objectContaining({
-                title: expect.any(Object),
-                scenes: expect.any(Object),
-                returnToMainPlot: expect.any(Object),
-              }),
-            }),
-          }),
+        data: expect.objectContaining({
+          campaignId: "camp_1",
+          generationStatus: "queued",
+          generationStage: "queued",
+          generationProgressMessage: "Queued for generation.",
         }),
       }),
     );
-    expect(mocks.questDraftCreate).toHaveBeenCalledTimes(1);
-    expect(mocks.questDraftCreate).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        campaignId: "camp_1",
-        questRequestId: "req_1",
-        title: generatedDraft.title,
-        generationMode: "provider",
-        generationProvider: "openai_responses",
-        generationModel: expect.any(String),
-        fallbackReason: null,
-        generationErrorCode: null,
-      }),
+    expect(mocks.scheduleQuestGenerationDispatch).toHaveBeenCalledWith({
+      campaignId: "camp_1",
+      questRequestId: "req_1",
     });
 
     await expect(response.json()).resolves.toMatchObject({
-      validation: {
-        valid: true,
-        errors: [],
-      },
-      draft: expect.objectContaining({
-        id: "draft_1",
-        title: generatedDraft.title,
-        generationMode: "provider",
-        generationProvider: "openai_responses",
-        generationModel: expect.any(String),
-      }),
-    });
-  });
-
-  it("creates a quest draft in quick_start mode without imported canon", async () => {
-    const baseDraft = {
-      ...createGeneratedDraft(),
-      title: "The Fog Harbor Ledger",
-      premise: "Fog Harbor loses dockworkers every dusk while the bells ring off-beat.",
-      hook: "A dockside fixer begs the party to find the missing workers before the harbor shuts down.",
-      scenes: [
-        {
-          name: "Dockside panic",
-          goal: "Learn who vanished and why nobody will say it aloud",
-          summary: "The party gathers testimony from frightened stevedores in Fog Harbor.",
-          location: "Fog Harbor docks",
-          conflictType: "investigation" as const,
-          outcomeOptions: ["Identify the last work crew", "Calm the dockside crowd"],
-        },
-        {
-          name: "Bell tower lead",
-          goal: "Follow the clue chain into the harbor bells",
-          summary: "Broken maintenance records point the party toward the bell tower above Fog Harbor.",
-          location: "Fog Harbor bell tower",
-          conflictType: "exploration" as const,
-          outcomeOptions: ["Find the hidden ledger", "Reveal the false alibi"],
-        },
-        {
-          name: "Warehouse reckoning",
-          goal: "Confront the crew behind the disappearances",
-          summary: "A hidden warehouse under Fog Harbor holds the abducted workers and the payoff records.",
-          location: "Fog Harbor tide warehouse",
-          conflictType: "mixed" as const,
-          outcomeOptions: ["Free the workers", "Seize the payment ledger"],
-        },
-      ],
-      gmSummary:
-        "A quick-start Fog Harbor module that can be run in one night and hands one clear lead back to the campaign.",
-    };
-    const generatedDraft = {
-      ...baseDraft,
-      locale: "en" as const,
-      npcs: [
-        ...baseDraft.npcs,
-        {
-          name: "Watchkeeper Brine",
-          role: "Skeptical watch officer",
-          motivation: "Keep the docks calm until dawn",
-          secret: "He ignored the first missing-person report",
-        },
-      ],
-    };
-
-    mocks.townProfileFindFirst.mockResolvedValueOnce(null);
-    mocks.canonicalEntryFindMany.mockReset();
-    mocks.canonFactFindMany.mockReset();
-    mocks.campaignDeltaFindMany.mockReset();
-    mocks.questRequestCreate.mockResolvedValueOnce({
-      id: "req_quick_start",
-      campaignId: "camp_1",
-      townProfileId: null,
-      townName: "Fog Harbor",
-      townVibe: "Wet docks and tolling bells.",
-      localTension: "Dockworkers disappear after dusk.",
-      questType: "investigation",
-      mainPlotRelation: null,
-      desiredLength: "3h",
-      extraContext: "Adventure premise: find the missing dockworkers.",
-      locale: "en",
-      requestMode: "quick_start",
-    });
-    mocks.responsesParse.mockResolvedValueOnce({
-      output_parsed: generatedDraft,
-    });
-    mocks.questDraftCreate.mockResolvedValueOnce({
-      id: "draft_quick_start",
-      campaignId: "camp_1",
-      questRequestId: "req_quick_start",
-      generationMode: "provider",
-      generationProvider: "openai_responses",
-      generationModel: "gpt-5.4-mini",
-      fallbackReason: null,
-      generationErrorCode: null,
-      ...generatedDraft,
-    });
-
-    const response = await POST(
-      new Request("http://localhost/api/campaigns/camp_1/quests", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          townProfileId: null,
-          townName: "Fog Harbor",
-          townVibe: "Wet docks and tolling bells.",
-          localTension: "Dockworkers disappear after dusk.",
-          questType: "investigation",
-          mainPlotRelation: null,
-          desiredLength: "3h",
-          extraContext: "Adventure premise: find the missing dockworkers.",
-          locale: "en",
-          requestMode: "quick_start",
-        }),
-      }),
-      {
-        params: Promise.resolve({ campaignId: "camp_1" }),
-      },
-    );
-
-    expect(response.status).toBe(201);
-    expect(mocks.canonicalEntryFindMany).not.toHaveBeenCalled();
-    expect(mocks.canonFactFindMany).not.toHaveBeenCalled();
-    expect(mocks.campaignDeltaFindMany).not.toHaveBeenCalled();
-    expect(mocks.questRequestCreate).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        townProfileId: null,
-        townName: "Fog Harbor",
-        requestMode: "quick_start",
-      }),
-    });
-
-    await expect(response.json()).resolves.toMatchObject({
+      draft: null,
       questRequest: {
-        requestMode: "quick_start",
-        townProfileId: null,
-        townName: "Fog Harbor",
-      },
-      validation: {
-        valid: true,
+        id: "req_1",
+        generationStatus: "queued",
+        generationStage: "queued",
       },
     });
   });
 
-  it("persists fallback provenance when the API key is missing", async () => {
-    mocks.campaignFindUnique.mockResolvedValueOnce({
-      id: "camp_1",
-      tone: "Bleak maritime intrigue",
-      partyLevel: 4,
-      llmProvider: "openai_chat",
-      llmApiKey: null,
-      llmModel: null,
-      llmBaseUrl: null,
+  it("accepts quick_start submissions without a stored town profile", async () => {
+    mocks.townProfileFindFirst.mockResolvedValueOnce(null);
+    mocks.questRequestCreate.mockResolvedValueOnce({
+      ...createQueuedQuestRequest(),
+      townProfileId: null,
+      requestMode: "quick_start",
+      townName: "Fog Harbor",
     });
 
-    mocks.questDraftCreate.mockResolvedValue({
-      id: "draft_1",
-      campaignId: "camp_1",
-      questRequestId: "req_1",
-      generationMode: "fallback",
-      generationProvider: "openai_chat",
-      generationModel: null,
-      fallbackReason: "missing_api_key",
-      generationErrorCode: null,
-      ...createGeneratedDraft(),
-    });
-
-    const response = await POST(
-      new Request("http://localhost/api/campaigns/camp_1/quests", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify(createRequestBody()),
-      }),
-      {
-        params: Promise.resolve({ campaignId: "camp_1" }),
-      },
-    );
-
-    expect(response.status).toBe(201);
-    expect(mocks.responsesParse).not.toHaveBeenCalled();
-    expect(mocks.questDraftCreate).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        generationMode: "fallback",
-        generationProvider: "openai_chat",
-        generationModel: null,
-        fallbackReason: "missing_api_key",
-        generationErrorCode: null,
-      }),
-    });
-  });
-
-  it("persists fallback provenance when OpenAI authentication fails", async () => {
-    mocks.responsesParse.mockRejectedValue({
-      code: "invalid_api_key",
-      status: 401,
-      message: "invalid API key",
-    });
-    mocks.questDraftCreate.mockResolvedValue({
-      id: "draft_1",
-      campaignId: "camp_1",
-      questRequestId: "req_1",
-      generationMode: "fallback",
-      generationProvider: "openai_responses",
-      generationModel: null,
-      fallbackReason: "invalid_api_key",
-      generationErrorCode: "invalid_api_key",
-      ...createGeneratedDraft(),
-    });
-
-    const response = await POST(
-      new Request("http://localhost/api/campaigns/camp_1/quests", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify(createRequestBody()),
-      }),
-      {
-        params: Promise.resolve({ campaignId: "camp_1" }),
-      },
-    );
-
-    expect(response.status).toBe(201);
-    expect(mocks.responsesParse).toHaveBeenCalledTimes(1);
-    expect(mocks.questDraftCreate).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        generationMode: "fallback",
-        generationProvider: "openai_responses",
-        generationModel: null,
-        fallbackReason: "invalid_api_key",
-        generationErrorCode: "invalid_api_key",
-      }),
-    });
-
-    await expect(response.json()).resolves.toMatchObject({
-      draft: expect.objectContaining({
-        generationMode: "fallback",
-        generationProvider: "openai_responses",
-        fallbackReason: "invalid_api_key",
-        generationErrorCode: "invalid_api_key",
-      }),
-    });
-  });
-
-  it("does not persist the draft when validation fails", async () => {
-    mocks.responsesParse.mockResolvedValue({
-      output_parsed: {
-        ...createGeneratedDraft(),
-        scenes: createGeneratedDraft().scenes.map((scene) => ({
-          ...scene,
-          conflictType: "social",
-        })),
-      },
-    });
-
-    const response = await POST(
-      new Request("http://localhost/api/campaigns/camp_1/quests", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify(createRequestBody()),
-      }),
-      {
-        params: Promise.resolve({ campaignId: "camp_1" }),
-      },
-    );
-
-    expect(response.status).toBe(422);
-    expect(mocks.questDraftCreate).not.toHaveBeenCalled();
-    await expect(response.json()).resolves.toMatchObject({
-      validation: {
-        valid: false,
-        errors: expect.arrayContaining([
-          "Quest scenes must include the requested quest type: investigation.",
-        ]),
-      },
-    });
-  });
-
-  it("rejects contradictory town identity when townProfileId and townName disagree", async () => {
     const response = await POST(
       new Request("http://localhost/api/campaigns/camp_1/quests", {
         method: "POST",
@@ -539,7 +149,38 @@ describe("quest generation route", () => {
         },
         body: JSON.stringify({
           ...createRequestBody(),
-          townName: "Redharbor",
+          townProfileId: null,
+          townName: "Fog Harbor",
+          requestMode: "quick_start",
+        }),
+      }),
+      {
+        params: Promise.resolve({ campaignId: "camp_1" }),
+      },
+    );
+
+    expect(response.status).toBe(202);
+    expect(mocks.questRequestCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          townProfileId: null,
+          townName: "Fog Harbor",
+          requestMode: "quick_start",
+        }),
+      }),
+    );
+  });
+
+  it("rejects mismatched town names before queuing generation", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/campaigns/camp_1/quests", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          ...createRequestBody(),
+          townName: "Wrong Town",
         }),
       }),
       {
@@ -549,9 +190,62 @@ describe("quest generation route", () => {
 
     expect(response.status).toBe(400);
     expect(mocks.questRequestCreate).not.toHaveBeenCalled();
-    expect(mocks.responsesParse).not.toHaveBeenCalled();
-    await expect(response.json()).resolves.toMatchObject({
-      error: 'townName must match the selected town profile name "Blackwater".',
+    expect(mocks.scheduleQuestGenerationDispatch).not.toHaveBeenCalled();
+  });
+
+  it("returns the current lifecycle state from the status route", async () => {
+    mocks.loadQuestGenerationStatus.mockResolvedValue({
+      questRequest: {
+        ...createQueuedQuestRequest(),
+        generationStatus: "running",
+        generationStage: "calling_provider",
+        generationProgressMessage: "Calling Anthropic provider...",
+        generationStartedAt: new Date("2026-04-22T10:00:00.000Z"),
+      },
+      draft: null,
     });
+
+    const response = await GET_STATUS(new Request("http://localhost"), {
+      params: Promise.resolve({ campaignId: "camp_1", requestId: "req_1" }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      questRequest: {
+        id: "req_1",
+        generationStatus: "running",
+        generationStage: "calling_provider",
+      },
+      draft: null,
+    });
+  });
+
+  it("renders terminal completed events from the SSE route", async () => {
+    mocks.loadQuestGenerationStatus.mockResolvedValue({
+      questRequest: {
+        ...createQueuedQuestRequest(),
+        generationStatus: "completed",
+        generationStage: "completed",
+        generationProgressMessage: "Quest draft ready.",
+        generationPreviewText: "Blackwater's chapel bell tolls twice.",
+        generationCompletedAt: new Date("2026-04-22T10:01:15.000Z"),
+      },
+      draft: {
+        id: "draft_1",
+        title: "The Bell Below Blackwater",
+      },
+    });
+
+    const response = await GET_EVENTS(new Request("http://localhost"), {
+      params: Promise.resolve({ campaignId: "camp_1", requestId: "req_1" }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = await response.text();
+
+    expect(body).toContain("event: status");
+    expect(body).toContain("event: text_delta");
+    expect(body).toContain("event: completed");
+    expect(body).toContain('"draftId":"draft_1"');
   });
 });

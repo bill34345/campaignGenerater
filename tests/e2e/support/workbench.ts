@@ -240,15 +240,8 @@ export async function openQuestRequest(page: Page) {
 export async function requestQuestAndOpenDraft(page: Page) {
   const requestForm = page.locator("form").filter({ has: page.locator("#town-name") });
   await requestForm.locator('button[type="submit"]').click();
-
-  const draftLink = requestForm.locator(
-    'a[href*="/quests/"]:not([href*="/quests/new"])',
-  );
-  await expect(draftLink).toBeVisible();
-  await Promise.all([
-    page.waitForURL(/\/campaigns\/[^/]+\/quests\/(?!new(?:[/?#]|$))[^/?#]+$/),
-    draftLink.click(),
-  ]);
+  await expect(page.getByTestId("quest-generation-status")).toBeVisible();
+  await page.waitForURL(/\/campaigns\/[^/]+\/quests\/(?!new(?:[/?#]|$))[^/?#]+$/);
 
   await expect(page.locator("#quest-title")).toBeVisible();
 }
